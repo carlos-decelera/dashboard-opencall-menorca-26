@@ -203,13 +203,7 @@ else:
     if not df["created_at_y"].empty and "created_at_y" in df.columns and not df["reference_3"].empty and "reference_3" in df.columns:
         cols = st.columns(2)
 
-        # VAMOS A HACER UNA GRAFICA DE APLICACIONES POR DIA ==========================
-        df_apps = df[df["stage"] == "Menorca 2026"]
-        df_apps["fecha"] = pd.to_datetime(df["created_at_y"], errors="coerce").dt.date
-
-        #agrupamos por fecha y contamos
-        df_counts_date = df_apps.groupby("fecha").size().reset_index(name="aplicaciones")
-        df_counts_date = df_counts_date.sort_values("fecha")
+        
 
         # Vamos a poner por cada fuente
         mapeo_reference = {
@@ -231,6 +225,14 @@ else:
         }
 
         df["categoria_reference"] = df["reference_3"].map(mapeo_reference).fillna("Otros")
+
+        # VAMOS A HACER UNA GRAFICA DE APLICACIONES POR DIA ==========================
+        df_apps = df[df["stage"] == "Menorca 2026"]
+        df_apps["fecha"] = pd.to_datetime(df["created_at_y"], errors="coerce").dt.date
+
+        #agrupamos por fecha y contamos
+        df_counts_date = df_apps.groupby("fecha").size().reset_index(name="aplicaciones")
+        df_counts_date = df_counts_date.sort_values("fecha")
 
         df_apps["categoria_reference"] = df_apps["reference_3"].map(mapeo_reference).fillna("Otros")
         df_categoria_date = df_apps.groupby(["fecha", "categoria_reference"]).size().reset_index(name="reference_per_day")
