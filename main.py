@@ -133,7 +133,12 @@ def get_combined_dataframe():
         async with httpx.AsyncClient() as client:
             # Lanzamos ambas peticiones al mismo tiempo
             records_task = fetch_data(client, f"{BASE_URL}/objects/{DEALS_ID}/records/query", 
-                                    payload={"filter": {"stage": "Menorca 2026"}})
+                                    payload={
+                                        "$or": [
+                                            {"stage": "Menorca 2026"},
+                                            {"stage": "Leads Menorca 2026"}
+                                        ]
+                                    })
             entries_task = fetch_data(client, f"{BASE_URL}/lists/{DEAL_FLOW_ID}/entries/query")
             
             return await asyncio.gather(records_task, entries_task)
