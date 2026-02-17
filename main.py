@@ -369,118 +369,118 @@ else:
 
         # VAMOS CON LA GRAFICA DE BARRAS
 
-    col_qual, col_play, col_pre = st.columns(3)
+        col_qual, col_play, col_pre = st.columns(3)
 
-    # 2. Definimos los colores corporativos
-    colores = {"Marketing": "#1FD0EF", "Referral": "#FFB950", "Outreach": "#FAF3DC"}
+        # 2. Definimos los colores corporativos
+        colores = {"Marketing": "#1FD0EF", "Referral": "#FFB950", "Outreach": "#FAF3DC"}
 
-    # 3. Iteramos por cada estado para crear su gráfica individual
-    for col, etapa in zip([col_qual, col_play, col_pre], ORDEN_ESTADOS):
-        with col:
-            # Filtramos los datos solo para esta etapa
-            df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa]
-            
-            fig_individual = go.Figure()
+        # 3. Iteramos por cada estado para crear su gráfica individual
+        for col, etapa in zip([col_qual, col_play, col_pre], ORDEN_ESTADOS):
+            with col:
+                # Filtramos los datos solo para esta etapa
+                df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa]
+                
+                fig_individual = go.Figure()
 
-            # Añadimos la barra de datos reales
-            fig_individual.add_trace(go.Bar(
-                x=df_etapa["Fuente"],
-                y=df_etapa["Actual"],
-                marker_color=[colores.get(f, "#bdc3c7") for f in df_etapa["Fuente"]],
-                text=df_etapa["Actual"],
-                textposition='outside',
-                name="Actual",
-                textfont=dict(color='black')
-            ))
+                # Añadimos la barra de datos reales
+                fig_individual.add_trace(go.Bar(
+                    x=df_etapa["Fuente"],
+                    y=df_etapa["Actual"],
+                    marker_color=[colores.get(f, "#bdc3c7") for f in df_etapa["Fuente"]],
+                    text=df_etapa["Actual"],
+                    textposition='outside',
+                    name="Actual",
+                    textfont=dict(color='black')
+                ))
 
-            # Añadimos las metas como marcadores (al ser barras simples, ahora sí se alinean solas)
-            fig_individual.add_trace(go.Scatter(
-                x=df_etapa["Fuente"],
-                y=df_etapa["Objetivo"],
-                mode='markers',
-                marker=dict(
-                    symbol="line-ew", 
-                    size=40, 
-                    line=dict(
-                        width=2,         # Más fina (antes era 4)
-                        color="#555555"  # Gris oscuro en vez de negro puro
+                # Añadimos las metas como marcadores (al ser barras simples, ahora sí se alinean solas)
+                fig_individual.add_trace(go.Scatter(
+                    x=df_etapa["Fuente"],
+                    y=df_etapa["Objetivo"],
+                    mode='markers',
+                    marker=dict(
+                        symbol="line-ew", 
+                        size=40, 
+                        line=dict(
+                            width=2,         # Más fina (antes era 4)
+                            color="#555555"  # Gris oscuro en vez de negro puro
+                        )
+                    ),
+                    hoverinfo="text",
+                    text=[f"Meta: {obj}" for obj in df_etapa["Objetivo"]]
+                ))
+
+                # Ajustes de diseño para que quepan bien en columnas pequeñas
+                fig_individual.update_layout(
+                    title=f"<b>{etapa}</b>",
+                    showlegend=False,
+                    height=400,
+                    margin=dict(l=20, r=20, t=50, b=40),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    # --- Configuración de Ejes ---
+                    xaxis=dict(
+                        tickfont=dict(color='black'), # Eje X en Negro
+                        linecolor='#d0d0d0'
+                    ),
+                    yaxis=dict(
+                        tickfont=dict(color='black'), # Eje Y también en Negro
+                        gridcolor='#f0f0f0'            # Cuadrícula muy suave
                     )
-                ),
-                hoverinfo="text",
-                text=[f"Meta: {obj}" for obj in df_etapa["Objetivo"]]
-            ))
-
-            # Ajustes de diseño para que quepan bien en columnas pequeñas
-            fig_individual.update_layout(
-                title=f"<b>{etapa}</b>",
-                showlegend=False,
-                height=400,
-                margin=dict(l=20, r=20, t=50, b=40),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                # --- Configuración de Ejes ---
-                xaxis=dict(
-                    tickfont=dict(color='black'), # Eje X en Negro
-                    linecolor='#d0d0d0'
-                ),
-                yaxis=dict(
-                    tickfont=dict(color='black'), # Eje Y también en Negro
-                    gridcolor='#f0f0f0'            # Cuadrícula muy suave
                 )
-            )
 
-            # Envolvemos cada una en tu contenedor curvado
-            st.plotly_chart(fig_individual, use_container_width=True)
+                # Envolvemos cada una en tu contenedor curvado
+                st.plotly_chart(fig_individual, use_container_width=True)
 
     
-    # VAMOS CON LOS NOT QUALIFIED
-    st.title("🚫 Desglose de los 'Not Qualified'")
+        # VAMOS CON LOS NOT QUALIFIED
+        st.title("🚫 Desglose de los 'Not Qualified'")
 
-    # 1. Filtramos las empresas "Not Qualified"
-    df_not_qual = df[df['status'].str.contains("Not qualified", case=False, na=False)].copy()
-    total_empresas_not_qual = len(df_not_qual) # Este es nuestro nuevo denominador
+        # 1. Filtramos las empresas "Not Qualified"
+        df_not_qual = df[df['status'].str.contains("Not qualified", case=False, na=False)].copy()
+        total_empresas_not_qual = len(df_not_qual) # Este es nuestro nuevo denominador
 
-    # 2. Extraemos los motivos asegurándonos de no contar dos veces el mismo motivo por empresa
-    all_reasons = []
-    for entry in df_not_qual['red_flags_form_7'].dropna():
-        # Usamos set() para que si una empresa tiene escrito dos veces lo mismo, solo cuente una vez
-        reasons = list(set([r.strip() for r in str(entry).split('\n') if r.strip()]))
-        all_reasons.extend(reasons)
+        # 2. Extraemos los motivos asegurándonos de no contar dos veces el mismo motivo por empresa
+        all_reasons = []
+        for entry in df_not_qual['red_flags_form_7'].dropna():
+            # Usamos set() para que si una empresa tiene escrito dos veces lo mismo, solo cuente una vez
+            reasons = list(set([r.strip() for r in str(entry).split('\n') if r.strip()]))
+            all_reasons.extend(reasons)
 
-    # 3. Creamos el conteo
-    df_reasons = pd.Series(all_reasons).value_counts().reset_index()
-    df_reasons.columns = ['Motivo', 'Cantidad']
+        # 3. Creamos el conteo
+        df_reasons = pd.Series(all_reasons).value_counts().reset_index()
+        df_reasons.columns = ['Motivo', 'Cantidad']
 
-    # 4. Calculamos el porcentaje sobre el TOTAL DE EMPRESAS
-    df_reasons['Porcentaje'] = (df_reasons['Cantidad'] / total_empresas_not_qual) * 100
+        # 4. Calculamos el porcentaje sobre el TOTAL DE EMPRESAS
+        df_reasons['Porcentaje'] = (df_reasons['Cantidad'] / total_empresas_not_qual) * 100
 
-    # 5. Gráfica con las etiquetas corregidas
-    fig_redflags = px.bar(
-        df_reasons,
-        x='Motivo',
-        y='Cantidad',
-        title='🚫 % de Empresas por cada Red Flag',
-        color='Cantidad',
-        color_continuous_scale='Reds',
-        # Pasamos el porcentaje calculado correctamente
-        custom_data=[df_reasons['Porcentaje']]
-    )
+        # 5. Gráfica con las etiquetas corregidas
+        fig_redflags = px.bar(
+            df_reasons,
+            x='Motivo',
+            y='Cantidad',
+            title='🚫 % de Empresas por cada Red Flag',
+            color='Cantidad',
+            color_continuous_scale='Reds',
+            # Pasamos el porcentaje calculado correctamente
+            custom_data=[df_reasons['Porcentaje']]
+        )
 
-    fig_redflags.update_traces(
-        # %{y} es el número de empresas, %{customdata[0]} es el % sobre el total de empresas
-        texttemplate='%{y}<br>(%{customdata[0]:.1f}%)',
-        textposition='outside',
-        textfont=dict(color='black', size=12),
-        cliponaxis=False
-    )
+        fig_redflags.update_traces(
+            # %{y} es el número de empresas, %{customdata[0]} es el % sobre el total de empresas
+            texttemplate='%{y}<br>(%{customdata[0]:.1f}%)',
+            textposition='outside',
+            textfont=dict(color='black', size=12),
+            cliponaxis=False
+        )
 
-    fig_redflags.update_layout(
-        yaxis=dict(range=[0, df_reasons['Cantidad'].max() * 1.2]), # Espacio para el texto
-        xaxis=dict(tickangle=45, automargin=True),
-        margin=dict(t=80, b=120),
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        coloraxis_showscale=False
-    )
+        fig_redflags.update_layout(
+            yaxis=dict(range=[0, df_reasons['Cantidad'].max() * 1.2]), # Espacio para el texto
+            xaxis=dict(tickangle=45, automargin=True),
+            margin=dict(t=80, b=120),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            coloraxis_showscale=False
+        )
 
-    st.plotly_chart(fig_redflags, use_container_width=True)
+        st.plotly_chart(fig_redflags, use_container_width=True)
