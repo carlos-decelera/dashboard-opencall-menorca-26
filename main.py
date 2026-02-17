@@ -195,7 +195,7 @@ if df.empty:
 else:
     # KPIs rápidos
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Applications", len(df))
+    col1.metric("Total Deals", len(df))
     col2.metric("Not Qualified", f"{len(df[df["status"] == "Not qualified"])} ({round(len(df[df["status"] == "Not qualified"])/len(df)*100, 2)} %)")
     col3.metric("Qualified", f"{len(df[df["status"] == "Qualified"])} ({round(len(df[df["status"]=="Qualified"])/len(df)*100, 2)} %)")
     col4.metric("In Play", f"{len(df[df["status"]=="In play"])} ({round(len(df[df["status"]=="In play"])/len(df)*100, 2)} %)")
@@ -204,7 +204,7 @@ else:
         cols = st.columns(2)
 
         # VAMOS A HACER UNA GRAFICA DE APLICACIONES POR DIA ==========================
-        df["fecha"] = pd.to_datetime(df["created_at_y"], errors="coerce").dt.date
+        df["fecha"] = pd.to_datetime(df[df["stage"] == "Menorca 2026"]["created_at_y"], errors="coerce").dt.date
 
         #agrupamos por fecha y contamos
         df_counts_date = df.groupby("fecha").size().reset_index(name="aplicaciones")
