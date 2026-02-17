@@ -204,7 +204,7 @@ else:
         cols = st.columns(2)
 
         # VAMOS A HACER UNA GRAFICA DE APLICACIONES POR DIA ==========================
-        df["fecha"] = pd.to_datetime(df[df["stage"] == "Menorca 2026"]["created_at_y"], errors="coerce").dt.date
+        df["fecha"] = pd.to_datetime(df[df["stage"] == "Menorca 2026"].copy()["created_at_y"], errors="coerce").dt.date
 
         #agrupamos por fecha y contamos
         df_counts_date = df.groupby("fecha").size().reset_index(name="aplicaciones")
@@ -226,7 +226,7 @@ else:
             "Contacted by LinkedIn": "Outreach",
             "Outbound": "Outreach",
             "Inbound": "Marketing",
-            "Decelera Team": "Outreach",
+            "Decelera Team": "Outreach"
         }
 
         df["categoria_reference"] = df["reference_3"].map(mapeo_reference).fillna("Otros")
@@ -282,7 +282,7 @@ else:
             st.plotly_chart(fig, use_container_width=True)
 
         # --- PIE CHART DE CATEGORIAS ---
-        df_pie_reference = df["reference_3"].value_counts().reset_index()
+        df_pie_reference = df["categoria_reference"].value_counts().reset_index()
         df_pie_reference.columns = ["Referencia", "Total"]
 
         fig_pie = px.pie(
