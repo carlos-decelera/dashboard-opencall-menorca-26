@@ -218,8 +218,15 @@ else:
             "Google": "Marketing",
             "Decelera Newsletter": "Marketing",
             "Referral": "Referral",
+            "Investor": "Referral",
+            "Portfolio": "Referral",
+            "Alumni": "Referral",
+            "EM": "Referral",
             "Event": "Outreach",
-            "Contacted by LinkedIn": "Outreach"
+            "Contacted by LinkedIn": "Outreach",
+            "Outbound": "Outreach",
+            "Inbound": "Marketing",
+            "Decelera Team": "Outreach",
         }
 
         df["categoria_reference"] = df["reference_3"].map(mapeo_reference).fillna("Otros")
