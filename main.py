@@ -429,6 +429,15 @@ else:
                     )
                 )
 
+                st.write("df_status completo:")
+                st.write(df_status)
+
+                st.write("Valores únicos de status en df:")
+                st.write(df["status"].unique())
+
+                st.write("Valores únicos de stage en df:")
+                st.write(df["stage"].unique())
+
                 # Envolvemos cada una en tu contenedor curvado
                 st.plotly_chart(fig_individual, use_container_width=True)
 
