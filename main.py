@@ -230,7 +230,7 @@ else:
             "Decelera Team": "Outreach"
         }
 
-        df["categoria_reference"] = df_apps["reference_3"].map(mapeo_reference).fillna("Otros")
+        df["categoria_reference"] = dfc["reference_3"].map(mapeo_reference).fillna("Otros")
 
         df_apps["categoria_reference"] = df_apps["reference_3"].map(mapeo_reference).fillna("Otros")
         df_categoria_date = df_apps.groupby(["fecha", "categoria_reference"]).size().reset_index(name="reference_per_day")
