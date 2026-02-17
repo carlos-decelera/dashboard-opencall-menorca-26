@@ -204,9 +204,10 @@ else:
         cols = st.columns(2)
 
         # VAMOS A HACER UNA GRAFICA DE APLICACIONES POR DIA ==========================
-        df["fecha"] = pd.to_datetime(df[df["stage"] == "Menorca 2026"].copy()["created_at_y"], errors="coerce").dt.date
+        df["fecha"] = pd.to_datetime(df["created_at_y"], errors="coerce").dt.date
 
         #agrupamos por fecha y contamos
+        df_counts_date = df[df["status"] == "Menorca 2026"]
         df_counts_date = df.groupby("fecha").size().reset_index(name="aplicaciones")
         df_counts_date = df_counts_date.sort_values("fecha")
 
