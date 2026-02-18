@@ -387,13 +387,16 @@ else:
             )
             val_qual = len(df_cat[mask_qual]) + val_in_play
 
+            pct_in_play = round(val_in_play / val_qual * 100, 2) if val_qual > 0 else 0
+            pct_pre = round(val_pre / val_in_play * 100, 2) if val_in_play > 0 else 0
+
             # Obtenemos los objetivos
             obj_dict = OBJETIVOS_POR_CATEGORIA.get(cat, {"Qualified": 0, "In Play": 0, "Pre-committee": 0})
 
             # Guardamos cada etapa en la lista para el gráfico
-            funnel_list.append({"Fuente": cat, "Etapa": "Qualified", "Actual": val_qual, "Objetivo": obj_dict.get("Qualified", 0)})
-            funnel_list.append({"Fuente": cat, "Etapa": "In Play", "Actual": val_in_play, "Objetivo": obj_dict.get("In Play", 0)})
-            funnel_list.append({"Fuente": cat, "Etapa": "Pre-committee", "Actual": val_pre, "Objetivo": obj_dict.get("Pre-committee", 0)})
+            funnel_list.append({"Fuente": cat, "Etapa": "Qualified", "Actual": val_qual, "Objetivo": obj_dict.get("Qualified", 0), "Pct": 100})
+            funnel_list.append({"Fuente": cat, "Etapa": "In Play", "Actual": val_in_play, "Objetivo": obj_dict.get("In Play", 0), "Pct": pct_in_play})
+            funnel_list.append({"Fuente": cat, "Etapa": "Pre-committee", "Actual": val_pre, "Objetivo": obj_dict.get("Pre-committee", 0), "Pct": pct_pre})
 
         df_final_funnel = pd.DataFrame(funnel_list)
 
@@ -406,6 +409,13 @@ else:
         for col, etapa in zip([col_qual, col_play, col_pre], ORDEN_ESTADOS):
             with col:
                 df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa].reset_index(drop=True)
+
+                #creamos etiquetas personalizadas
+                if etapa == "Qualified":
+                    labels = [f"<b>{val}</b>" for val in df_etapa["Actual"]]
+                else:
+                    labels = [f"<b>{val}</b><br><span style='font-size:10px;'>({pct:.1f}%)</span>"
+                            for val, pct in zip(df_etapa["Actual"], df_etapa["Pct"])]
                 
                 fig_individual = go.Figure()
 
@@ -414,8 +424,9 @@ else:
                     x=df_etapa["Fuente"],
                     y=df_etapa["Actual"],
                     marker_color=[colores.get(f, "#bdc3c7") for f in df_etapa["Fuente"]],
-                    text=df_etapa["Actual"],
+                    text=labels,
                     textposition='outside',
+                    cliponaxis=False,
                     name="Actual",
                     textfont=dict(color='black')
                 ))
