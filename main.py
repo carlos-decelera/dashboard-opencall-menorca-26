@@ -295,6 +295,14 @@ else:
             st.plotly_chart(fig, use_container_width=True)
 
         # --- PIE CHART DE CATEGORIAS ---
+        status_map = {
+            "Leads Menorca 2026": "Deal Flow",
+            "Menorca 2026": "Open Call"
+        }
+
+        df["stage_bonito"] = df["stage"].map(status_map)
+        status_list = df["stage_bonito"].unique().tolist()
+
         df_pie_reference = df["categoria_reference"].value_counts().reset_index()
         df_pie_reference.columns = ["Referencia", "Total"]
 
@@ -305,6 +313,44 @@ else:
             title='🎯 Distribución Total por Reference',
             hole=0.4,
             color_discrete_sequence=px.colors.qualitative.Safe
+        )
+
+        # --- LÓGICA DE BOTONES INTERNOS ---
+        buttons = []
+
+        # Añadir opción "Todos"
+        buttons.append(dict(
+            method="restyle",
+            label="Todos",
+            args=[{"values": [df["categoria_reference"].value_counts().values],
+                "labels": [df["categoria_reference"].value_counts().index]}]
+        ))
+
+        # Añadir un botón por cada status
+        for status in status_list:
+            df_temp = df[df["status"] == status]["categoria_reference"].value_counts()
+            buttons.append(dict(
+                method="restyle",
+                label=status,
+                args=[{"values": [df_temp.values], 
+                    "labels": [df_temp.index]}]
+            ))
+
+        # 4. Configurar el menú desplegable en el layout
+        fig_pie.update_layout(
+            updatemenus=[
+                dict(
+                    buttons=buttons,
+                    direction="down",
+                    showactive=True,
+                    x=0.0,      # Esquina superior izquierda de la gráfica
+                    xanchor="left",
+                    y=1.15,     # Por encima del título
+                    yanchor="top",
+                    bgcolor="white",
+                    bordercolor="#bec8d9"
+                )
+            ]
         )
 
         fig_pie.update_traces(
