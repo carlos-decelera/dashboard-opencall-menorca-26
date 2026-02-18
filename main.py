@@ -321,14 +321,13 @@ else:
         # Añadir opción "Todos"
         buttons.append(dict(
             method="restyle",
-            label="Todos",
             args=[{"values": [df["categoria_reference"].value_counts().values],
                 "labels": [df["categoria_reference"].value_counts().index]}]
         ))
 
         # Añadir un botón por cada status
         for status in status_list:
-            df_temp = df[df["status"] == status]["categoria_reference"].value_counts()
+            df_temp = df[df["stage"] == status]["categoria_reference"].value_counts()
             buttons.append(dict(
                 method="restyle",
                 label=status,
