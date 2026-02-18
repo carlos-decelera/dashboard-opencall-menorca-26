@@ -412,9 +412,9 @@ else:
 
                 #creamos etiquetas personalizadas
                 if etapa == "Qualified":
-                    labels = [f"<b>{val}</b>" for val in df_etapa["Actual"]]
+                    labels = [f"{val}" for val in df_etapa["Actual"]]
                 else:
-                    labels = [f"<b>{val}</b><br><span style='font-size:10px;'>({pct:.1f}%)</span>"
+                    labels = [f"{val}<br><span style='font-size:15px;'>({pct:.1f}%)</span>"
                             for val, pct in zip(df_etapa["Actual"], df_etapa["Pct"])]
                 
                 fig_individual = go.Figure()
