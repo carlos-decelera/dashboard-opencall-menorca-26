@@ -329,10 +329,10 @@ else:
         with cols[1]:
             st.plotly_chart(fig_pie, use_container_width=True, config={"responsive": True, "displayModeBar": False})
 
-        st.title("📊Funnel de Aplicaciones por Reference con Objetivos")
+        st.title("📊 Funnel de Aplicaciones por Reference con Objetivos")
         st.markdown("Las referencias se han agrupado en función de los objetivos definidos:<br> - Marketing: Mail from Decelera Team, Social media, Press, Google, Decelera Newsletter<br> - Referral: Referral<br> - Outreach: Event, Contacted via LinkedIn", unsafe_allow_html=True)
 
-        # --- VAMOS CON LAS CATEGORIAS, CONVERSION Y OBJETIVOS
+        # --- CONFIGURACIÓN ---
         OBJETIVOS_POR_CATEGORIA = {
             "Marketing": {"Qualified": 660, "In Play": 40, "Pre-committee": 2},
             "Referral": {"Qualified": 150, "In Play": 50, "Pre-committee": 5},
@@ -341,21 +341,41 @@ else:
         }
 
         ORDEN_ESTADOS = ["Qualified", "In Play", "Pre-committee"]
+        colores = {"Marketing": "#1FD0EF", "Referral": "#FFB950", "Outreach": "#FAF3DC"}
 
-        df_status = df.groupby(["categoria_reference", "status"]).size().reset_index(name="conteo")
+        # --- PROCESAMIENTO DE DATOS (CORREGIDO) ---
+
+        # 1. Agrupamos incluyendo 'reason' para poder filtrar por ella después
+        df_status = df.groupby(["categoria_reference", "status", "reason"], dropna=False).size().reset_index(name="conteo")
 
         funnel_list = []
-        for cat in df["categoria_reference"].unique():
+        # Iteramos sobre las categorías que nos interesan (evitando 'Otros' si quieres)
+        categorias_validas = [c for c in df["categoria_reference"].unique() if c != "Otros"]
+
+        for cat in categorias_validas:
+            # 'temp' ahora sí tiene la columna 'reason'
             temp = df_status[df_status["categoria_reference"] == cat]
 
-            #Valores reales acumulados hacia atras
-            val_pre = temp[temp["status"] == "Pre-committee"]["conteo"].sum()
-            val_in_play = temp[temp["status"] == "In play"]["conteo"].sum() + val_pre
-            val_qual = temp[temp["status"] == "Qualified"]["conteo"].sum() + val_in_play
+            # --- Lógica de filtrado y acumulación ---
+            # Nota: He mantenido tus condiciones exactas (ojo con 'Pre-comitee' con una 'm')
+            
+            # Pre-committee
+            mask_pre = (temp["status"] == "Pre-committee") | (temp["reason"] == "Pre-comitee")
+            val_pre = temp[mask_pre]["conteo"].sum()
 
-            #Obtenemos los objetivos
-            obj_dict = OBJETIVOS_POR_CATEGORIA.get(cat)
+            # In play (Acumulado)
+            mask_in_play = (temp["status"] == "In play") | \
+                        (temp["reason"] == "Signals (In play)")
+            val_in_play = temp[mask_in_play]["conteo"].sum() + val_pre
 
+            # Qualified (Acumulado)
+            mask_qual = (temp["status"] == "Qualified") | (temp["reason"] == "Signals (Qualified)") | (temp["reason"].isna())
+            val_qual = temp[mask_qual]["conteo"].sum() + val_in_play
+
+            # Obtenemos los objetivos
+            obj_dict = OBJETIVOS_POR_CATEGORIA.get(cat, {"Qualified": 0, "In Play": 0, "Pre-committee": 0})
+
+            # Guardamos cada etapa
             for etapa, valor in zip(ORDEN_ESTADOS, [val_qual, val_in_play, val_pre]):
                 funnel_list.append({
                     "Fuente": cat,
@@ -363,26 +383,20 @@ else:
                     "Actual": valor,
                     "Objetivo": obj_dict.get(etapa, 0)
                 })
-        
-        df_final_funnel = pd.DataFrame(funnel_list)
-        df_final_funnel = df_final_funnel[df_final_funnel["Fuente"] != "Otros"]
 
-        # VAMOS CON LA GRAFICA DE BARRAS
+        df_final_funnel = pd.DataFrame(funnel_list)
+
+        # --- VISUALIZACIÓN ---
 
         col_qual, col_play, col_pre = st.columns(3)
 
-        # 2. Definimos los colores corporativos
-        colores = {"Marketing": "#1FD0EF", "Referral": "#FFB950", "Outreach": "#FAF3DC"}
-
-        # 3. Iteramos por cada estado para crear su gráfica individual
         for col, etapa in zip([col_qual, col_play, col_pre], ORDEN_ESTADOS):
             with col:
-                # Filtramos los datos solo para esta etapa
-                df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa]
+                df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa].reset_index(drop=True)
                 
                 fig_individual = go.Figure()
 
-                # Añadimos la barra de datos reales
+                # Barra de Actual
                 fig_individual.add_trace(go.Bar(
                     x=df_etapa["Fuente"],
                     y=df_etapa["Actual"],
@@ -393,7 +407,7 @@ else:
                     textfont=dict(color='black')
                 ))
 
-                # Añadimos las metas como marcadores (al ser barras simples, ahora sí se alinean solas)
+                # Marcador de Objetivo
                 fig_individual.add_trace(go.Scatter(
                     x=df_etapa["Fuente"],
                     y=df_etapa["Objetivo"],
@@ -401,16 +415,12 @@ else:
                     marker=dict(
                         symbol="line-ew", 
                         size=40, 
-                        line=dict(
-                            width=2,         # Más fina (antes era 4)
-                            color="#555555"  # Gris oscuro en vez de negro puro
-                        )
+                        line=dict(width=2, color="#555555")
                     ),
                     hoverinfo="text",
                     text=[f"Meta: {obj}" for obj in df_etapa["Objetivo"]]
                 ))
 
-                # Ajustes de diseño para que quepan bien en columnas pequeñas
                 fig_individual.update_layout(
                     title=f"<b>{etapa}</b>",
                     showlegend=False,
@@ -418,32 +428,16 @@ else:
                     margin=dict(l=20, r=20, t=50, b=40),
                     paper_bgcolor='rgba(0,0,0,0)',
                     plot_bgcolor='rgba(0,0,0,0)',
-                    # --- Configuración de Ejes ---
-                    xaxis=dict(
-                        tickfont=dict(color='black'), # Eje X en Negro
-                        linecolor='#d0d0d0'
-                    ),
-                    yaxis=dict(
-                        tickfont=dict(color='black'), # Eje Y también en Negro
-                        gridcolor='#f0f0f0'            # Cuadrícula muy suave
-                    )
+                    xaxis=dict(tickfont=dict(color='black'), linecolor='#d0d0d0'),
+                    yaxis=dict(tickfont=dict(color='black'), gridcolor='#f0f0f0')
                 )
 
-                st.write("df_status completo:")
-                st.write(df_status)
-
-                st.write("Valores únicos de status en df:")
-                st.write(df["status"].unique())
-
-                st.write("Valores únicos de stage en df:")
-                st.write(df["stage"].unique())
-
-                # Envolvemos cada una en tu contenedor curvado
                 st.plotly_chart(fig_individual, use_container_width=True)
 
     
         # VAMOS CON LOS NOT QUALIFIED
         st.title("🚫 Desglose de los 'Not Qualified'")
+        col1, col2 = st.columns(2)
 
         # 1. Filtramos las empresas "Not Qualified"
         df_not_qual = df[df['status'].str.contains("Not qualified", case=False, na=False)].copy()
@@ -492,4 +486,40 @@ else:
             coloraxis_showscale=False
         )
 
-        st.plotly_chart(fig_redflags, use_container_width=True)
+        with col1:
+            st.plotly_chart(fig_redflags, use_container_width=True)
+
+        df_reasons_not_qual = df_not_qual.groupby("reason").size().reset_index()
+        df_reasons_not_qual.columns = ["reason", "conteo"]
+
+        df_reasons_not_qual["porcentaje"] = (df_reasons_not_qual["conteo"] / total_empresas_not_qual) * 100
+
+        fig_not_qual = px.bar(
+            df_reasons_not_qual,
+            x="reason",
+            y="conteo",
+            title="Motivos de 'Not Qualified",
+            color="conteo",
+            color_continuous_scale="Reds",
+            custom_data=[df_reasons_not_qual["porcentaje"]]
+        )
+
+        fig_not_qual.update_traces(
+            # %{y} es el número de empresas, %{customdata[0]} es el % sobre el total de empresas
+            texttemplate='%{y}<br>(%{customdata[0]:.1f}%)',
+            textposition='outside',
+            textfont=dict(color='black', size=12),
+            cliponaxis=False
+        )
+
+        fig_not_qual.update_layout(
+            yaxis=dict(range=[0, df_reasons_not_qual['conteo'].max() * 1.2]), # Espacio para el texto
+            xaxis=dict(tickangle=45, automargin=True),
+            margin=dict(t=80, b=120),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            coloraxis_showscale=False
+        )
+
+        with col2:
+            st.plotly_chart(fig_not_qual, use_container_width=True)
