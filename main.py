@@ -347,43 +347,48 @@ else:
         # --- PROCESAMIENTO DE DATOS (CORREGIDO) ---
 
         # 1. Agrupamos incluyendo 'reason' para poder filtrar por ella después
-        df_status = df.groupby(["categoria_reference", "status", "reason"], dropna=False).size().reset_index(name="conteo")
-
+        # 1. Trabajamos sobre el dataframe original (df) para evitar perder datos en la agrupación
         funnel_list = []
-        # Iteramos sobre las categorías que nos interesan (evitando 'Otros' si quieres)
-        categorias_validas = [c for c in df["categoria_reference"].unique() if c != "Otros"]
+        categorias_validas = [c for c in df["categoria_reference"].unique() if pd.notna(c) and c != "Otros"]
 
         for cat in categorias_validas:
-            # 'temp' ahora sí tiene la columna 'reason'
-            temp = df_status[df_status["categoria_reference"] == cat]
+            # Filtramos el DF por la categoría actual
+            df_cat = df[df["categoria_reference"] == cat]
 
-            # --- Lógica de filtrado y acumulación ---
-            # Nota: He mantenido tus condiciones exactas (ojo con 'Pre-comitee' con una 'm')
-            
-            # Pre-committee
-            mask_pre = (temp["status"] == "Pre-committee") | (temp["reason"] == "Pre-comitee")
-            val_pre = temp[mask_pre]["conteo"].sum()
+            # --- Conteo de Pre-committee (Los 4 que mencionas) ---
+            # Buscamos en ambas columnas: status o reason
+            mask_pre = (
+                (df_cat["status"] == "Pre-committee") | 
+                (df_cat["reason"] == "Pre-comitee") | 
+                (df_cat["reason"] == "Pre-committee") # Por si acaso se corrige el typo
+            )
+            val_pre = len(df_cat[mask_pre])
 
-            # In play (Acumulado)
-            mask_in_play = (temp["status"] == "In play") | \
-                        (temp["reason"] == "Signals (In play)")
-            val_in_play = temp[mask_in_play]["conteo"].sum() + val_pre
+            # --- Conteo de In play (Acumulado) ---
+            mask_in_play = (
+                (df_cat["status"] == "In play") | 
+                (df_cat["reason"] == "Signals (In play)")
+            )
+            val_in_play = len(df_cat[mask_in_play]) + val_pre
 
-            # Qualified (Acumulado)
-            mask_qual = (temp["status"] == "Qualified") | (temp["reason"] == "Signals (Qualified)") | (temp["reason"].isna())
-            val_qual = temp[mask_qual]["conteo"].sum() + val_in_play
+            # --- Conteo de Qualified (Acumulado) ---
+            # Nota: Aquí sumamos los que están en Qualified puro + los acumulados
+            mask_qual = (
+                (df_cat["status"] == "Qualified") | 
+                (df_cat["reason"] == "Signals (Qualified)") |
+                (df_cat["reason"].isna() & (df_cat["status"] == "Qualified"))
+            )
+            val_qual = len(df_cat[mask_qual]) + val_in_play
 
             # Obtenemos los objetivos
             obj_dict = OBJETIVOS_POR_CATEGORIA.get(cat, {"Qualified": 0, "In Play": 0, "Pre-committee": 0})
 
-            # Guardamos cada etapa
-            for etapa, valor in zip(ORDEN_ESTADOS, [val_qual, val_in_play, val_pre]):
-                funnel_list.append({
-                    "Fuente": cat,
-                    "Etapa": etapa,
-                    "Actual": valor,
-                    "Objetivo": obj_dict.get(etapa, 0)
-                })
+            # Guardamos cada etapa en la lista para el gráfico
+            funnel_list.append({"Fuente": cat, "Etapa": "Qualified", "Actual": val_qual, "Objetivo": obj_dict.get("Qualified", 0)})
+            funnel_list.append({"Fuente": cat, "Etapa": "In Play", "Actual": val_in_play, "Objetivo": obj_dict.get("In Play", 0)})
+            funnel_list.append({"Fuente": cat, "Etapa": "Pre-committee", "Actual": val_pre, "Objetivo": obj_dict.get("Pre-committee", 0)})
+
+        df_final_funnel = pd.DataFrame(funnel_list)
 
         df_final_funnel = pd.DataFrame(funnel_list)
 
