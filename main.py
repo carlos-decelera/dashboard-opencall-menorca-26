@@ -221,10 +221,11 @@ else:
             "Contacted by LinkedIn": "Outreach",
             "Outbound": "Outreach",
             "Inbound": "Marketing",
-            "Decelera Team": "Outreach"
+            "Decelera Team": "Outreach",
+            "Other": "Otros"
         }
 
-        df["categoria_reference"] = df["reference_3"].map(mapeo_reference).fillna("Otros")
+        df["categoria_reference"] = df["reference_3"].map(mapeo_reference).dropna()
 
         # VAMOS A HACER UNA GRAFICA DE APLICACIONES POR DIA ==========================
         df_apps = df[df["stage"] == "Menorca 2026"]
