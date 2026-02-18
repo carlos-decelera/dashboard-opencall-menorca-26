@@ -342,7 +342,7 @@ else:
                     buttons=buttons,
                     direction="down",
                     showactive=True,
-                    x=0.0,      # Esquina superior izquierda de la gráfica
+                    x=3.0,      # Esquina superior izquierda de la gráfica
                     xanchor="left",
                     y=1.15,     # Por encima del título
                     yanchor="top",
