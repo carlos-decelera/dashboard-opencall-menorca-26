@@ -462,7 +462,7 @@ else:
             df_reasons,
             x='Motivo',
             y='Cantidad',
-            title='🚫 % de Empresas por cada Red Flag',
+            title='🚫 % de Empresas por cada Red Flag de Tesis',
             color='Cantidad',
             color_continuous_scale='Reds',
             # Pasamos el porcentaje calculado correctamente
@@ -498,7 +498,7 @@ else:
             df_reasons_not_qual,
             x="reason",
             y="conteo",
-            title="Motivos de 'Not Qualified",
+            title="Motivos de 'Not Qualified'",
             color="conteo",
             color_continuous_scale="Reds",
             custom_data=[df_reasons_not_qual["porcentaje"]]
