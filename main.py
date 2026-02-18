@@ -155,6 +155,13 @@ def get_combined_dataframe():
         
     return pd.merge(df_rec, df_ent, on="record_id")
 
+col_title, col_btn = st.columns([0.85, 0.15])
+
+with col_btn:
+    if st.button("🔄 Refrescar"):
+        get_combined_dataframe.clear()
+        st.rerun()
+
 # --- INTERFAZ STREAMLIT ---
 st.markdown("""
 <style>
