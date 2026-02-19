@@ -387,7 +387,6 @@ else:
             df_const = df.copy()
             df_const[campo_const] = df_const[campo_const].fillna("Sin especificar")
 
-            st.write(f"{df_const[campo_const].unique()}")
 
             # Agrupamos y contamos
             df_const_counts = df_const.groupby(campo_const).size().reset_index(name="Cantidad")
