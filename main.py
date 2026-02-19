@@ -381,14 +381,14 @@ else:
 
         # --- GRÁFICA DE DISTRIBUCIÓN DE FORM SCORE ---
         # --- GRÁFICA DE DISTRIBUCIÓN CONTINUA (KDE) ---
-        col1, col2 = st.columns(2)
+        
         # 1. Limpieza y preparación (igual que antes)
         df_score = df[df["form_score"].notna()].copy()
         df_score["form_score"] = pd.to_numeric(df_score["form_score"], errors="coerce")
         df_score = df_score[df_score["form_score"] > 0]
 
         st.title(f"📈 Form Scoring de las aplicaciones: {len(df_score)} aplicaciones")
-
+        col1, col2 = st.columns(2)
 
         if df_score.empty:
             st.warning("No hay suficientes datos para generar la curva de distribución.")
