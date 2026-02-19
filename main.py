@@ -234,25 +234,30 @@ else:
         'c8d13743-d7e8-4e9e-b967-3d8e6ac3750e': 'Lorenzo Hurtado de Saracho',
     }
 
-    # --- 1. NORMALIZACIÓN INICIAL (Nada más cargar el DF) ---
-    # Convertimos a datetime, quitamos zona horaria y forzamos hora a medianoche (.dt.normalize())
-    df["created_at_y_dt"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None).dt.normalize()
+    # --- 1. NORMALIZACIÓN REAL (Quitar horas de verdad) ---
+    # Convertimos a datetime -> quitamos zona horaria -> extraemos solo la FECHA
+    df["fecha_limpia"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None).dt.date
 
-    # --- 2. FILTRADO POR PERIODO ---
+    # --- 2. DEFINIR FECHA DE CORTE (16 de Febrero de 2016) ---
+    fecha_bulk = pd.to_datetime("2016-02-16").date()
+
+    # --- 3. FILTRADO SEGÚN EL BOTÓN ---
     if st.session_state.periodo == "Semana":
-        hoy = pd.Timestamp.now().normalize()
+        # Calculamos el lunes de esta semana (solo fecha)
+        hoy = pd.Timestamp.now().date()
         lunes_actual = hoy - pd.Timedelta(days=hoy.weekday())
-        df = df[df["created_at_y_dt"] >= lunes_actual].copy()
+        
+        # Filtro: Que sea de esta semana Y que NO sea el día del bulk import
+        mask = (df["fecha_limpia"] >= lunes_actual) & (df["fecha_limpia"] != fecha_bulk)
+        df_filtrado = df[mask].copy()
+    else:
+        # Filtro: Solo quitamos el día del bulk import
+        df_filtrado = df[df["fecha_limpia"] != fecha_bulk].copy()
 
-    # --- 3. EXCLUSIÓN DEL BULK IMPORT ---
-    # Definimos el día exacto a borrar (ya normalizado a las 00:00)
-    fecha_bulk = pd.Timestamp(2016, 2, 16).normalize()
+    # --- 4. CÁLCULO DE MÉTRICAS ---
+    member_count = df_filtrado["owner"].value_counts()
 
-    # Aplicamos el filtro para las métricas de los miembros
-    df_clean = df[df["created_at_y_dt"] != fecha_bulk].copy()
-    member_count = df_clean["owner"].value_counts()
-
-    # --- 4. RENDERIZADO DE MÉTRICAS ---
+    # --- 5. RENDERIZADO ---
     cols = st.columns(len(member_map))
     for i, (user_id, name) in enumerate(member_map.items()):
         with cols[i]:
