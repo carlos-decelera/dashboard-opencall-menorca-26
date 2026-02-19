@@ -445,9 +445,7 @@ else:
 
             # VAMOS A DARLE A LAS GREEN FLAGS
 
-            # --- SECCIÓN GREEN FLAGS ---
-            st.title("✅ Análisis de Fortalezas (Green Flags)")
-            
+            # --- SECCIÓN GREEN FLAGS ---            
             # 1. Filtramos compañías que tengan el campo de green flags (ajusta el nombre del campo)
             # Asumo que el campo se llama 'green_flags_form_7', cámbialo si es necesario
             campo_green_flags = 'green_flags_form' 
@@ -475,7 +473,7 @@ else:
                         df_gf_counts,
                         x='Green Flag',
                         y='Cantidad',
-                        title=f'🟢 Prevalencia de Green Flags (% sobre {total_companias_con_flags} compañías)',
+                        title=f'🟢 Prevalencia de Green Flags',
                         color='Cantidad',
                         color_continuous_scale='Greens',
                         custom_data=[df_gf_counts['Porcentaje']]
