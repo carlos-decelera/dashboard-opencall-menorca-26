@@ -304,30 +304,45 @@ else:
         # VAMOS A HACER UNA GRAFICA DE APLICACIONES POR DIA ==========================
         # --- 1. PREPARACIÓN DE DATOS BASE ---
         df_apps_base = df.copy()
+        # Limpiamos espacios y aplicamos el mapa
+        df_apps_base["stage_limpio"] = df_apps_base["stage"].astype(str).str.strip()
+        df_apps_base["stage_bonito"] = df_apps_base["stage_limpio"].map(status_map)
         df_apps_base["fecha"] = pd.to_datetime(df_apps_base["created_at_y"], errors="coerce").dt.date
-        df_apps_base["stage_bonito"] = df_apps_base["stage"].map(status_map)
-        df_apps_base["categoria_reference"] = df_apps_base["reference_3"].map(mapeo_reference).fillna("Otros")
 
-        # --- 2. FUNCIÓN PARA GENERAR LAS TRAZAS SEGÚN FILTRO ---
+        # --- 2. FUNCIÓN DE TRAZAS CON RESTA SELECTIVA ---
         def get_traces_for_status(status=None):
             if status:
-                df_f = df_apps_base[df_apps_base["stage_bonito"] == status]
+                df_f = df_apps_base[df_apps_base["stage_bonito"] == status].copy()
             else:
-                df_f = df_apps_base
+                df_f = df_apps_base.copy()
 
-            # Agrupación Total
+            # Agrupación Total por fecha
             df_total = df_f.groupby("fecha").size().reset_index(name="aplicaciones")
             
+            # --- LÓGICA DE LA RESTA ESPECÍFICA ---
+            fecha_target = pd.to_datetime("2026-02-16").date()
             
+            # SOLO restamos si:
+            # a) Estamos viendo el total (status is None)
+            # b) Estamos viendo específicamente Leads (status == "Deal Flow")
+            if status is None or status == "Deal Flow":
+                mask = df_total["fecha"] == fecha_target
+                if mask.any():
+                    # Restamos 268 solo a este grupo
+                    df_total.loc[mask, "aplicaciones"] = (df_total.loc[mask, "aplicaciones"] - 268).clip(lower=0)
             
             df_total = df_total.sort_values("fecha")
             
-            # Agrupación por Categoría
+            # Agrupación por Categoría (para las líneas de colores)
             df_cat = df_f.groupby(["fecha", "categoria_reference"]).size().reset_index(name="count")
             
-            # OPCIONAL: Si quieres restar los 268 de una categoría específica (ej: 'Otros')
-            # harías una lógica similar aquí con df_cat.
-            
+            # Si quieres que en el desglose por categorías también se note la resta:
+            if status is None or status == "Deal Flow":
+                # Restamos de 'Otros' (o la categoría que prefieras) para que cuadre el total
+                mask_cat = (df_cat["fecha"] == fecha_target) & (df_cat["categoria_reference"] == "Otros")
+                if mask_cat.any():
+                    df_cat.loc[mask_cat, "count"] = (df_cat.loc[mask_cat, "count"] - 268).clip(lower=0)
+
             df_cat = df_cat.sort_values("fecha")
             
             return df_total, df_cat
