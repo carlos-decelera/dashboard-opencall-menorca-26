@@ -256,7 +256,7 @@ else:
     if st.session_state.periodo == "Semana":
         st.caption(f"Filas excluidas (Bulk 16 Feb): {filas_quitadas}")
 
-    counts = df_filtrado["owner"].astype(str).value_counts()
+    counts = df_filtrado[df["status"] != "Not qualified"]["owner"].astype(str).value_counts()
 
     cols = st.columns(len(member_map))
     for i, (user_id, name) in enumerate(member_map.items()):
