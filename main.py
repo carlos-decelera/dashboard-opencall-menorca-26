@@ -233,6 +233,8 @@ else:
     col3.metric("Qualified", f"{len(df[df["status"] == "Qualified"])} ({round(len(df[df["status"]=="Qualified"])/len(df)*100, 2)} %)")
     col4.metric("In Play", f"{len(df[df["status"]=="In play"])} ({round(len(df[df["status"]=="In play"])/len(df)*100, 2)} %)")
     
+    st.title("General Metrics")
+
     member_map = {
         '7f0c4189-764d-453a-8d6b-e416adf7583b': 'Raquel Polgrabia',
         '7f35b25b-4398-4f28-bcf3-1bf59c2b04d4': 'Alejandro Perez',
