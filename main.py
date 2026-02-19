@@ -577,7 +577,7 @@ else:
         all_reasons = []
         for entry in df_not_qual['red_flags_form_7'].dropna():
             # Usamos set() para que si una empresa tiene escrito dos veces lo mismo, solo cuente una vez
-            reasons = list(set([r.strip() for r in str(entry).split('\n') if (r.strip() and "🔴" in r)]))
+            reasons = list(set([r.strip() for r in str(entry).split('\n') if (r.strip() and "🛑" in r)]))
             all_reasons.extend(reasons)
 
         # 3. Creamos el conteo
