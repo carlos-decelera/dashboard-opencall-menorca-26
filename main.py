@@ -215,7 +215,7 @@ with col_filtro2:
 
 # Logica de filtrado
 if st.session_state.periodo == "Semana":
-    df["created_at_y_dt"] = pd.to_datetime(df["created_at_y"])
+    df["created_at_y_dt"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None)
 
     # Calculamos el lunes de la semana actual
     hoy = pd.Timestamp.now()
