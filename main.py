@@ -324,7 +324,7 @@ else:
             mask = df_total["fecha"] == fecha_target
             if mask.any():
                 # Restamos 268, pero nos aseguramos de no bajar de 0
-                df_total.loc[mask, "aplicaciones"] = (df_total.loc[mask, "aplicaciones"] - 268).clip(lower=0)
+                df_total.loc[mask, "aplicaciones"] = (df_total.loc[mask, "aplicaciones"] - 274).clip(lower=0)
             
             df_total = df_total.sort_values("fecha")
             
