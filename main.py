@@ -198,6 +198,31 @@ st.markdown("")
 with st.spinner("Sincronizando con Attio..."):
     df = get_combined_dataframe()
 
+col_filtro1, col_filtro2, col_espacio = st.columns([0.2, 0.2, 0.6])
+
+if "periodo" not in st.session_state:
+    st.session_state.periodo = "Todo"
+
+with col_filtro1:
+    if st.button("🌐 Visión Global", use_container_width=True):
+        st.session_state.periodo = "Todo"
+        st.rerun()
+
+with col_filtro2:
+    if st.button("📅 Visión Semanal", use_container_width=True):
+        st.session_state.periodo="Semana"
+        st.rerun()
+
+# Logica de filtrado
+if st.session_state.periodo == "Semana":
+    df["created_at_y_dt"] = pd.to_datetime(df["created_at_y"])
+
+    # Calculamos el lunes de la semana actual
+    hoy = pd.Timestamp.now()
+    lunes_actual = (hoy - pd.Timedelta(days=hoy.weekday())).replace(hour=0, minute=0, second=0, microsecon=0)
+
+    df = df[df["created_at_y_dt"] >= lunes_actual].copy()
+
 if df.empty:
     st.warning("No se encontraron datos para los filtros aplicados.")
 else:
