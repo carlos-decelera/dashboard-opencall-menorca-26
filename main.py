@@ -379,6 +379,41 @@ else:
         with cols[1]:
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
 
+        # Vamos a hacer unas barras para ver los paises de los que vienen
+        campo_const = "constitution_company"
+
+        if campo_const in  df.columns:
+            df_const = df.copy()
+            df_const[campo_const] = df_const[campo_const].fillna("Sin especificar")
+
+            # Agrupamos y contamos
+            df_const_counts = df_const.groupby(campo_const).size().reset_index(name="Cantidad")
+            df_const_counts = df_const_counts.sort_values("Cantidad", ascending=False)
+
+            # Creamos las gráficas
+            fig_const = px.bar(
+                df_const_counts,
+                x=campo_const,
+                y="Cantidad",
+                color="Cantidad",
+                color_continuous_scale="Blues",
+                text="Cantidad",
+                template="plotly_white"
+            )
+
+            # 3. Estética
+            fig_const.update_traces(textposition='outside')
+            fig_const.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                coloraxis_showscale=False,
+                xaxis={'categoryorder':'total descending'}
+            )
+
+            st.plotly_chart(fig_const, use_container_width=True)
+        else:
+            st.error(f"No se encontró la columna '{campo_const}' en los datos de Attio.")
+
         # --- GRÁFICA DE DISTRIBUCIÓN DE FORM SCORE ---
         # --- GRÁFICA DE DISTRIBUCIÓN CONTINUA (KDE) ---
         
