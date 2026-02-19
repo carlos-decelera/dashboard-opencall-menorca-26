@@ -249,17 +249,31 @@ else:
 
         # --- 2. FUNCIÓN PARA GENERAR LAS TRAZAS SEGÚN FILTRO ---
         def get_traces_for_status(status=None):
-            # Filtrar por status si no es "Todos"
             if status:
                 df_f = df_apps_base[df_apps_base["stage_bonito"] == status]
             else:
                 df_f = df_apps_base
 
-            # Agrupación Total (Línea punteada)
-            df_total = df_f.groupby("fecha").size().reset_index(name="aplicaciones").sort_values("fecha")
+            # Agrupación Total
+            df_total = df_f.groupby("fecha").size().reset_index(name="aplicaciones")
+            
+            # --- RESTA DE 268 AL DÍA ESPECÍFICO ---
+            fecha_target = pd.to_datetime("2026-02-16").date()
+            # Buscamos si existe esa fecha en el conteo y restamos
+            mask = df_total["fecha"] == fecha_target
+            if mask.any():
+                # Restamos 268, pero nos aseguramos de no bajar de 0
+                df_total.loc[mask, "aplicaciones"] = (df_total.loc[mask, "aplicaciones"] - 268).clip(lower=0)
+            
+            df_total = df_total.sort_values("fecha")
             
             # Agrupación por Categoría
-            df_cat = df_f.groupby(["fecha", "categoria_reference"]).size().reset_index(name="count").sort_values("fecha")
+            df_cat = df_f.groupby(["fecha", "categoria_reference"]).size().reset_index(name="count")
+            
+            # OPCIONAL: Si quieres restar los 268 de una categoría específica (ej: 'Otros')
+            # harías una lógica similar aquí con df_cat.
+            
+            df_cat = df_cat.sort_values("fecha")
             
             return df_total, df_cat
 
