@@ -236,148 +236,106 @@ else:
         df["categoria_reference"] = df["reference_3"].map(mapeo_reference).dropna()
 
         # VAMOS A HACER UNA GRAFICA DE APLICACIONES POR DIA ==========================
-        df_apps = df[df["stage"] == "Menorca 2026"]
-        df_apps["fecha"] = pd.to_datetime(df["created_at_y"], errors="coerce").dt.date
+        # --- 1. PREPARACIÓN DE DATOS BASE ---
+        df_apps_base = df.copy()
+        df_apps_base["fecha"] = pd.to_datetime(df_apps_base["created_at_y"], errors="coerce").dt.date
+        df_apps_base["stage_bonito"] = df_apps_base["stage"].map(status_map)
+        df_apps_base["categoria_reference"] = df_apps_base["reference_3"].map(mapeo_reference).fillna("Otros")
 
-        #agrupamos por fecha y contamos
-        df_counts_date = df_apps.groupby("fecha").size().reset_index(name="aplicaciones")
-        df_counts_date = df_counts_date.sort_values("fecha")
+        # --- 2. FUNCIÓN PARA GENERAR LAS TRAZAS SEGÚN FILTRO ---
+        def get_traces_for_status(status=None):
+            # Filtrar por status si no es "Todos"
+            if status:
+                df_f = df_apps_base[df_apps_base["stage_bonito"] == status]
+            else:
+                df_f = df_apps_base
 
-        df_apps["categoria_reference"] = df_apps["reference_3"].map(mapeo_reference).fillna("Otros")
-        df_categoria_date = df_apps.groupby(["fecha", "categoria_reference"]).size().reset_index(name="reference_per_day")
+            # Agrupación Total (Línea punteada)
+            df_total = df_f.groupby("fecha").size().reset_index(name="aplicaciones").sort_values("fecha")
+            
+            # Agrupación por Categoría
+            df_cat = df_f.groupby(["fecha", "categoria_reference"]).size().reset_index(name="count").sort_values("fecha")
+            
+            return df_total, df_cat
 
-        df_categoria_date = df_categoria_date.sort_values("fecha")
-        
-        #creamos la grafica con plotly
+        # Datos iniciales (Todos)
+        df_total_all, df_cat_all = get_traces_for_status()
+
+        # --- 3. CREAR FIGURA INICIAL ---
         fig = px.line(
-            df_categoria_date,
-            x="fecha",
-            y="reference_per_day",
-            title="Applications received per day",
-            color="categoria_reference",
-            markers=True,
-            labels={"fecha": "Date", "reference_per_day": "Number of Applications"},
-            template="plotly_white"
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=df_counts_date["fecha"],
-                y=df_counts_date["aplicaciones"],
-                name="Total",
-                line=dict(color="#1FD0EF", width=4, dash="dot"),
-                mode="lines+markers"
-            )
-        )
-
-        fig.update_layout(
-            title='📈 Evolución de Aplicaciones: Reference vs Total',
-            hovermode='x unified',
-            xaxis=dict(
-                type='date',
-                dtick=86400000.0,
-                tickmode='linear',
-                tickformat='%d %b'
-            ),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
-
-        fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)', # Fondo del lienzo transparente
-            plot_bgcolor='rgba(0,0,0,0)'   # Fondo de la gráfica transparente
-        )
-
-        fig.for_each_trace(lambda trace: 
-            # 2. Si el nombre no es "Total", la ocultamos en la leyenda por defecto
-            trace.update(visible="legendonly") if trace.name != "Total" else ()
-        )
-
-        with cols[0]:
-            st.plotly_chart(fig, use_container_width=True)
-
-        # --- PIE CHART DE CATEGORIAS ---
-        status_map = {
-            "Leads Menorca 2026": "Deal Flow",
-            "Menorca 2026": "Open Call"
-        }
-
-        # 1. Crear la columna con nombres limpios
-        df["stage_bonito"] = df["stage"].map(status_map)
-        # Sacamos la lista de la columna 'stage_bonito'
-        status_list = df["stage_bonito"].dropna().unique().tolist()
-
-        # 2. Datos iniciales (Todos)
-        df_counts_all = df["categoria_reference"].value_counts()
-
-        fig_pie = px.pie(
-            names=df_counts_all.index,
-            values=df_counts_all.values,
-            title='🎯 Distribución por Reference',
-            hole=0.4,
+            df_cat_all, x="fecha", y="count", color="categoria_reference",
+            markers=True, template="plotly_white",
             color_discrete_sequence=px.colors.qualitative.Safe
         )
 
-        # --- LÓGICA DE BOTONES INTERNOS ---
-        buttons = []
-
-        # Botón "Todos"
-        buttons.append(dict(
-            method="restyle",
-            label="Todos",
-            args=[{"values": [df_counts_all.values], "labels": [df_counts_all.index]}]
+        # Añadir línea de Total
+        fig.add_trace(go.Scatter(
+            x=df_total_all["fecha"], y=df_total_all["aplicaciones"],
+            name="Total", line=dict(color="#1FD0EF", width=4, dash="dot"),
+            mode="lines+markers"
         ))
 
-        # Botones por Status
+        # --- 4. CONSTRUCCIÓN DE BOTONES ---
+        line_buttons = []
+        status_list = ["Deal Flow", "Open Call"] # Tus filtros deseados
+
+        # Botón para "Todos"
+        line_buttons.append(dict(
+            method="restyle",
+            label="Todos",
+            args=[{
+                "x": [df_cat_all[df_cat_all["categoria_reference"]==c]["fecha"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["fecha"]],
+                "y": [df_cat_all[df_cat_all["categoria_reference"]==c]["count"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["aplicaciones"]]
+            }]
+        ))
+
         for status in status_list:
-            # FILTRAMOS por la columna 'stage_bonito' para que coincida con el texto del botón
-            df_temp = df[df["stage_bonito"] == status]["categoria_reference"].value_counts()
+            df_t, df_c = get_traces_for_status(status)
             
-            buttons.append(dict(
+            # Extraemos los datos para cada categoría existente en la figura
+            # Es importante mantener el orden de las trazas originales
+            new_x = []
+            new_y = []
+            
+            # Trazas de categorías (px.line crea una traza por color)
+            for trace in fig.data:
+                if trace.name == "Total":
+                    new_x.append(df_t["fecha"])
+                    new_y.append(df_t["aplicaciones"])
+                else:
+                    filtered_cat = df_c[df_c["categoria_reference"] == trace.name]
+                    new_x.append(filtered_cat["fecha"])
+                    new_y.append(filtered_cat["count"])
+
+            line_buttons.append(dict(
                 method="restyle",
                 label=status,
-                args=[{"values": [df_temp.values], "labels": [df_temp.index]}]
+                args=[{"x": new_x, "y": new_y}]
             ))
 
-        # 3. Configurar Layout y Menú
-        fig_pie.update_layout(
-            updatemenus=[
-                dict(
-                    buttons=buttons,
-                    direction="down",
-                    showactive=True,
-                    x=1.0,      # 0.0 es la izquierda del gráfico
-                    xanchor="left",
-                    y=1.2,      # Un poco más arriba para que no tape el título
-                    yanchor="top",
-                    bgcolor="white",
-                    bordercolor="#bec8d9"
-                )
-            ],
-            margin=dict(t=100, b=50, l=40, r=150) # Aumentamos margen superior (t) para el botón
-        )
-
-        # --- Estética ---
-        fig_pie.update_traces(
-            textinfo='percent+value',
-            textposition='auto',
-            marker=dict(line=dict(color="#000000", width=1)),
-            textfont=dict(color="black", size=14)
-        )
-
-        fig_pie.update_layout(
+        # --- 5. LAYOUT Y ESTÉTICA ---
+        fig.update_layout(
+            updatemenus=[dict(
+                buttons=line_buttons,
+                direction="down", showactive=True,
+                x=1.0, xanchor="right", y=1.2, yanchor="top",
+                bgcolor="white", bordercolor="#bec8d9"
+            )],
+            title='📈 Evolución de Aplicaciones: Reference vs Total',
+            hovermode='x unified',
+            xaxis=dict(type='date', tickformat='%d %b'),
+            margin=dict(t=100),
             paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            legend=dict(
-                orientation="v",
-                yanchor="middle",
-                y=0.5,
-                xanchor="left",
-                x=1.1
-            )
+            plot_bgcolor='rgba(0,0,0,0)'
         )
 
-        with cols[1]:
-            st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
+        # Ocultar categorías por defecto excepto Total
+        for trace in fig.data:
+            if trace.name != "Total":
+                trace.visible = "legendonly"
+
+        with cols[0]:
+            st.plotly_chart(fig, use_container_width=True)
 
         # Vamos a hacer unas barras para ver los paises de los que vienen
         col1, col2 = st.columns(2)
