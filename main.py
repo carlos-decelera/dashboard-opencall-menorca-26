@@ -249,7 +249,7 @@ else:
 
     for i, (user_id, name) in enumerate(member_map.items()):
         with cols[i]:
-            total = counts.get(user_id, 0)
+            total = member_count.get(user_id, 0)
             st.metric(label=name, value=total)
 
     if not df["created_at_y"].empty and "created_at_y" in df.columns and not df["reference_3"].empty and "reference_3" in df.columns:
