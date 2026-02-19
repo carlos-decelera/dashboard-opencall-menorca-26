@@ -233,6 +233,25 @@ else:
     col3.metric("Qualified", f"{len(df[df["status"] == "Qualified"])} ({round(len(df[df["status"]=="Qualified"])/len(df)*100, 2)} %)")
     col4.metric("In Play", f"{len(df[df["status"]=="In play"])} ({round(len(df[df["status"]=="In play"])/len(df)*100, 2)} %)")
     
+    member_map = {
+        '2f347934-032a-411c-a5ef-169cd635dd05': 'Carlos Martinez Piferrer',
+        '648bf97f-8d29-4965-ab20-6b4cc63f37ee': 'Carlota L',
+        '7f0c4189-764d-453a-8d6b-e416adf7583b': 'Raquel Polgrabia',
+        '7f35b25b-4398-4f28-bcf3-1bf59c2b04d4': 'Alejandro Perez',
+        '8bd199e1-4aac-485c-b70f-a9b7679286d1': 'Diego Navarro',
+        'a50a814f-3434-43ae-80ba-d3377360bde0': 'Carlota Lechere',
+        'c8d13743-d7e8-4e9e-b967-3d8e6ac3750e': 'Lorenzo Hurtado de Saracho',
+        'f9052939-0ba1-4981-92f6-db6163ca93c1': 'Marcos Martín'
+    }
+
+    member_count = df["owner"].value_counts()
+    cols = st.streamlit(5)
+
+    for i, (user_id, name) in enumerate(mapping.items()):
+        with cols[i]:
+            total = counts.get(user_id, 0)
+            st.metric(label=name, value=total)
+
     if not df["created_at_y"].empty and "created_at_y" in df.columns and not df["reference_3"].empty and "reference_3" in df.columns:
         cols = st.columns(2)
 
