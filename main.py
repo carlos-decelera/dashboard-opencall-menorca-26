@@ -244,8 +244,9 @@ else:
     if st.session_state.periodo == "Semana":
         # Filtramos usando una fecha real de pandas
         fecha_filtro = pd.to_datetime("2016-02-16")
-        mask = df["created_at_y_dt"].dt.date != fecha_filtro.date()
-        member_count = df.loc["owner"].value_counts()
+        df["fecha"] = pd.to_datetime(df["created_at_y"], errors="coerce").dt.date
+        mask = df["fecha"].dt.date != fecha_filtro.date()
+        member_count = df.loc[mask, "owner"].value_counts()
     else:
         member_count = df["owner"].value_counts()
 
