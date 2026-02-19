@@ -242,20 +242,26 @@ else:
     }
 
     if st.session_state.periodo == "Semana":
-        member_count = df[df["created_at_y_dt"] != "16-02-2016"]["owner"].value_counts()
+        # Filtramos usando una fecha real de pandas
+        fecha_filtro = pd.to_datetime("2016-02-16")
+        mask = df["created_at_y_dt"].dt.date != fecha_filtro.date()
+        member_count = df.loc[mask, "owner"].value_counts()
     else:
         member_count = df["owner"].value_counts()
-    cols = st.columns(5)
+
+    # Debug: Descomenta la siguiente línea para ver si los IDs coinciden con tu diccionario
+    # st.write(member_count) 
+
+    cols = st.columns(len(member_map))
 
     for i, (user_id, name) in enumerate(member_map.items()):
         with cols[i]:
-            total = member_count.get(user_id, 0)
-            st.metric(label=name, value=total)
+            # Usamos .get() con el ID convertido a string para evitar fallos de tipo
+            total = member_count.get(str(user_id), 0)
+            st.metric(label=name, value=int(total))
 
     if not df["created_at_y"].empty and "created_at_y" in df.columns and not df["reference_3"].empty and "reference_3" in df.columns:
         cols = st.columns(2)
-
-        
 
         # Vamos a poner por cada fuente
         status_map = {
