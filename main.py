@@ -381,7 +381,7 @@ else:
 
         # --- GRÁFICA DE DISTRIBUCIÓN DE FORM SCORE ---
         # --- GRÁFICA DE DISTRIBUCIÓN CONTINUA (KDE) ---
-
+        col1, col2 = st.columns(2)
         # 1. Limpieza y preparación (igual que antes)
         df_score = df[df["form_score"].notna()].copy()
         df_score["form_score"] = pd.to_numeric(df_score["form_score"], errors="coerce")
@@ -440,8 +440,69 @@ else:
                 xaxis=dict(title="Puntuación", range=[0, 100], dtick=10),
                 yaxis=dict(title="Densidad de probabilidad")
             )
+            with col1:
+                st.plotly_chart(fig_dist, use_container_width=True)
 
-            st.plotly_chart(fig_dist, use_container_width=True)
+            # VAMOS A DARLE A LAS GREEN FLAGS
+
+            # --- SECCIÓN GREEN FLAGS ---
+            st.title("✅ Análisis de Fortalezas (Green Flags)")
+            
+            # 1. Filtramos compañías que tengan el campo de green flags (ajusta el nombre del campo)
+            # Asumo que el campo se llama 'green_flags_form_7', cámbialo si es necesario
+            campo_green_flags = 'green_flags_form' 
+            
+            if campo_green_flags in df.columns:
+                df_green = df[df[campo_green_flags].notna()].copy()
+                total_companias_con_flags = len(df_green)
+                
+                if total_companias_con_flags > 0:
+                    all_green_reasons = []
+                    for entry in df_green[campo_green_flags]:
+                        # Extraemos líneas que contienen el círculo verde, limpiamos y evitamos duplicados por empresa
+                        flags = list(set([g.strip() for g in str(entry).split('\n') if (g.strip() and "🟢" in g)]))
+                        all_green_reasons.extend(flags)
+
+                    # 2. Conteo y preparación de DataFrame
+                    df_gf_counts = pd.Series(all_green_reasons).value_counts().reset_index()
+                    df_gf_counts.columns = ['Green Flag', 'Cantidad']
+                    
+                    # 3. Calcular % sobre el total de compañías que tienen alguna flag
+                    df_gf_counts['Porcentaje'] = (df_gf_counts['Cantidad'] / total_companias_con_flags) * 100
+
+                    # 4. Visualización
+                    fig_greenflags = px.bar(
+                        df_gf_counts,
+                        x='Green Flag',
+                        y='Cantidad',
+                        title=f'🟢 Prevalencia de Green Flags (% sobre {total_companias_con_flags} compañías)',
+                        color='Cantidad',
+                        color_continuous_scale='Greens',
+                        custom_data=[df_gf_counts['Porcentaje']]
+                    )
+
+                    fig_greenflags.update_traces(
+                        texttemplate='%{y}<br>(%{customdata[0]:.1f}%)',
+                        textposition='outside',
+                        textfont=dict(color='black', size=12),
+                        cliponaxis=False
+                    )
+
+                    fig_greenflags.update_layout(
+                        yaxis=dict(range=[0, df_gf_counts['Cantidad'].max() * 1.3]), # Espacio para etiquetas
+                        xaxis=dict(tickangle=45, automargin=True),
+                        margin=dict(t=80, b=120),
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        coloraxis_showscale=False
+                    )
+
+                    with col2:
+                        st.plotly_chart(fig_greenflags, use_container_width=True)
+                else:
+                    st.info("No se han encontrado Green Flags registradas en las compañías.")
+            else:
+                st.error(f"El campo '{campo_green_flags}' no se encuentra en el DataFrame. Verifica el nombre del atributo en Attio.")
 
         st.title("📊 Funnel de Startups por Reference con Objetivos")
         st.markdown("Las referencias se han agrupado en función de los objetivos definidos:<br> - Marketing: Mail from Decelera Team, Social media, Press, Google, Decelera Newsletter<br> - Referral: Referral<br> - Outreach: Event, Contacted via LinkedIn", unsafe_allow_html=True)
@@ -503,8 +564,6 @@ else:
             funnel_list.append({"Fuente": cat, "Etapa": "Qualified", "Actual": val_qual, "Objetivo": obj_dict.get("Qualified", 0), "Pct": 100})
             funnel_list.append({"Fuente": cat, "Etapa": "In Play", "Actual": val_in_play, "Objetivo": obj_dict.get("In Play", 0), "Pct": pct_in_play})
             funnel_list.append({"Fuente": cat, "Etapa": "Pre-committee", "Actual": val_pre, "Objetivo": obj_dict.get("Pre-committee", 0), "Pct": pct_pre})
-
-        df_final_funnel = pd.DataFrame(funnel_list)
 
         df_final_funnel = pd.DataFrame(funnel_list)
 
