@@ -461,8 +461,6 @@ else:
                 plot_bgcolor='rgba(0,0,0,0)'
             )
 
-            fig_const.update_yaxes(rangemode="tozero", padding=0.1)
-
             fig_const.update_traces(
                 textposition='outside', 
                 cliponaxis=False,
