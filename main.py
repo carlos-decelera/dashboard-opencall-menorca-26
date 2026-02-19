@@ -384,18 +384,19 @@ else:
         campo_const = "constitution_company"
 
         if campo_const in df.columns:
-            # 1. Preparación de datos limpia
             df_const = df.copy()
             df_const[campo_const] = df_const[campo_const].fillna("Sin especificar")
             df_const["stage_bonito"] = df_const["stage"].map(status_map)
             
-            # Función auxiliar para obtener datos agrupados
-            def get_const_data(dataframe):
-                res = dataframe.groupby(campo_const).size().reset_index(name="Cantidad")
-                return res.sort_values("Cantidad", ascending=False)
+            # --- FUNCIÓN PARA GENERAR ETIQUETAS CON PORCENTAJE ---
+            def get_labels_with_pct(counts_series):
+                total = counts_series.sum()
+                # Creamos una lista tipo: ["15 (30%)", "10 (20%)", ...]
+                return [f"{v} ({(v/total)*100:.1f}%)" if total > 0 else f"{v}" for v in counts_series]
 
             # Datos iniciales (Todos)
-            df_all = get_const_data(df_const)
+            df_all = df_const.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
+            text_all = get_labels_with_pct(df_all["Cantidad"])
 
             fig_const = px.bar(
                 df_all,
@@ -404,7 +405,7 @@ else:
                 title="Constitution location",
                 color="Cantidad",
                 color_continuous_scale="Blues",
-                text="Cantidad",
+                text=text_all, # Usamos nuestras etiquetas calculadas
                 template="plotly_white"
             )
 
@@ -418,8 +419,8 @@ else:
                 args=[{
                     "x": [df_all[campo_const].tolist()],
                     "y": [df_all["Cantidad"].tolist()],
-                    "text": [df_all["Cantidad"].tolist()],
-                    "marker.color": [df_all["Cantidad"].tolist()] # Actualiza el degradado
+                    "text": [text_all], # Lista con porcentajes
+                    "marker.color": [df_all["Cantidad"].tolist()]
                 }]
             ))
 
@@ -427,7 +428,10 @@ else:
             status_list = df_const["stage_bonito"].dropna().unique().tolist()
             for status in status_list:
                 df_filtered = df_const[df_const["stage_bonito"] == status]
-                df_temp = get_const_data(df_filtered)
+                df_temp = df_filtered.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
+                
+                # Calculamos porcentajes específicos para este filtro
+                text_temp = get_labels_with_pct(df_temp["Cantidad"])
                 
                 const_buttons.append(dict(
                     method="restyle",
@@ -435,29 +439,33 @@ else:
                     args=[{
                         "x": [df_temp[campo_const].tolist()],
                         "y": [df_temp["Cantidad"].tolist()],
-                        "text": [df_temp["Cantidad"].tolist()],
+                        "text": [text_temp], # Lista con porcentajes del filtro
                         "marker.color": [df_temp["Cantidad"].tolist()]
                     }]
                 ))
 
-            # 3. Configurar Layout (Botón y márgenes)
+            # 3. Layout (Manteniendo posición arriba a la derecha)
             fig_const.update_layout(
                 updatemenus=[dict(
                     buttons=const_buttons,
                     direction="down",
                     showactive=True,
-                    x=1.0, y=1.25, # Posición arriba a la izquierda
-                    xanchor="left", yanchor="top",
+                    x=1.0, xanchor="right",
+                    y=1.25, yanchor="top",
                     bgcolor="white", bordercolor="#bec8d9"
                 )],
-                margin=dict(t=100, b=50, l=40, r=40),
+                margin=dict(t=120, b=50, l=40, r=40),
                 xaxis={'categoryorder':'total descending'},
                 coloraxis_showscale=False,
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)'
             )
 
-            fig_const.update_traces(textposition='outside', cliponaxis=False)
+            fig_const.update_traces(
+                textposition='outside', 
+                cliponaxis=False,
+                textfont=dict(size=12, color="black") # Ajustamos fuente para que quepa el texto
+            )
 
             with col1:
                 st.plotly_chart(fig_const, use_container_width=True, config={"displayModeBar": False})
