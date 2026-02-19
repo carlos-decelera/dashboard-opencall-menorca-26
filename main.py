@@ -447,7 +447,7 @@ else:
                     direction="down",
                     showactive=True,
                     x=1.0, y=1.25, # Posición arriba a la izquierda
-                    xanchor="right", yanchor="top",
+                    xanchor="left", yanchor="top",
                     bgcolor="white", bordercolor="#bec8d9"
                 )],
                 margin=dict(t=100, b=50, l=40, r=40),
