@@ -380,6 +380,7 @@ else:
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
 
         # Vamos a hacer unas barras para ver los paises de los que vienen
+        col1, col2 = st.columns(2)
         campo_const = "constitution_company"
 
         if campo_const in  df.columns:
@@ -410,7 +411,8 @@ else:
                 xaxis={'categoryorder':'total descending'}
             )
 
-            st.plotly_chart(fig_const, use_container_width=True)
+            with col1:
+                st.plotly_chart(fig_const, use_container_width=True)
         else:
             st.error(f"No se encontró la columna '{campo_const}' en los datos de Attio.")
 
