@@ -241,18 +241,24 @@ else:
         'c8d13743-d7e8-4e9e-b967-3d8e6ac3750e': 'Lorenzo Hurtado de Saracho',
     }
     st.title("General Metrics")
-    df["fecha_limpia"] = pd.to_datetime(df["created_at_y"], utc=True).dt.tz_localize(None).dt.date
-    fecha_bulk = pd.to_datetime("2026-02-16").date()
+
+    # Pasamos todo a string formato YYYY-MM-DD para que no haya margen de error
+    df["fecha_iso"] = pd.to_datetime(df["created_at_y"], errors='coerce').dt.strftime('%Y-%m-%d')
+    target = "2026-02-16"
 
     if st.session_state.periodo == "Semana":
-        df_filtrado = df[df["fecha_limpia"] != fecha_bulk].copy()
+        df_filtrado = df[df["fecha_iso"] != target].copy()
     else:
         df_filtrado = df.copy()
-        
-    counts = df["owner"].astype(str).value_counts()
+
+    # Mostrar diferencia de filas para saber si está funcionando
+    filas_quitadas = len(df) - len(df_filtrado)
+    if st.session_state.periodo == "Semana":
+        st.caption(f"Filas excluidas (Bulk 16 Feb): {filas_quitadas}")
+
+    counts = df_filtrado["owner"].astype(str).value_counts()
 
     cols = st.columns(len(member_map))
-
     for i, (user_id, name) in enumerate(member_map.items()):
         with cols[i]:
             total = counts.get(str(user_id), 0)
