@@ -456,8 +456,10 @@ else:
                 )],
                 margin=dict(t=120, b=50, l=40, r=40),
                 xaxis={'categoryorder':'total descending'},
+                yaxis=dict(
+                    range=[0, df_all["Cantidad"].max()*1.5]
+                ),
                 coloraxis_showscale=False,
-                cliponaxis=False,
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)'
             )
