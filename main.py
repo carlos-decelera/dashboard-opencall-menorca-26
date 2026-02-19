@@ -234,23 +234,28 @@ else:
         'c8d13743-d7e8-4e9e-b967-3d8e6ac3750e': 'Lorenzo Hurtado de Saracho',
     }
 
+    # --- 1. NORMALIZACIÓN INICIAL (Nada más cargar el DF) ---
+    # Convertimos a datetime, quitamos zona horaria y forzamos hora a medianoche (.dt.normalize())
+    df["created_at_y_dt"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None).dt.normalize()
+
+    # --- 2. FILTRADO POR PERIODO ---
     if st.session_state.periodo == "Semana":
-        # Filtramos usando una fecha real de pandas
-        fecha_filtro = pd.to_datetime("2016-02-16")
-        df["fecha"] = pd.to_datetime(df["created_at_y"], errors="coerce")
-        mask = df["fecha"].dt.date != fecha_filtro.date()
-        member_count = df.loc[mask, "owner"].value_counts()
-    else:
-        member_count = df["owner"].value_counts()
+        hoy = pd.Timestamp.now().normalize()
+        lunes_actual = hoy - pd.Timedelta(days=hoy.weekday())
+        df = df[df["created_at_y_dt"] >= lunes_actual].copy()
 
-    # Debug: Descomenta la siguiente línea para ver si los IDs coinciden con tu diccionario
-    # st.write(member_count) 
+    # --- 3. EXCLUSIÓN DEL BULK IMPORT ---
+    # Definimos el día exacto a borrar (ya normalizado a las 00:00)
+    fecha_bulk = pd.Timestamp(2016, 2, 16).normalize()
 
+    # Aplicamos el filtro para las métricas de los miembros
+    df_clean = df[df["created_at_y_dt"] != fecha_bulk].copy()
+    member_count = df_clean["owner"].value_counts()
+
+    # --- 4. RENDERIZADO DE MÉTRICAS ---
     cols = st.columns(len(member_map))
-
     for i, (user_id, name) in enumerate(member_map.items()):
         with cols[i]:
-            # Usamos .get() con el ID convertido a string para evitar fallos de tipo
             total = member_count.get(str(user_id), 0)
             st.metric(label=name, value=int(total))
     
