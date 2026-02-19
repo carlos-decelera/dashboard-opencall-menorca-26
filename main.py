@@ -384,90 +384,83 @@ else:
         campo_const = "constitution_company"
 
         if campo_const in df.columns:
-            # 1. Preparación de datos (Igual que en la primera gráfica)
+            # 1. Preparación de datos limpia
             df_const = df.copy()
             df_const[campo_const] = df_const[campo_const].fillna("Sin especificar")
-            # Aseguramos que tenga la columna mapeada
             df_const["stage_bonito"] = df_const["stage"].map(status_map)
             
-            # 2. Datos iniciales (Estado "Todos")
-            df_const_all = df_const.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
+            # Función auxiliar para obtener datos agrupados
+            def get_const_data(dataframe):
+                res = dataframe.groupby(campo_const).size().reset_index(name="Cantidad")
+                return res.sort_values("Cantidad", ascending=False)
+
+            # Datos iniciales (Todos)
+            df_all = get_const_data(df_const)
 
             fig_const = px.bar(
-                df_const_all,
+                df_all,
                 x=campo_const,
                 y="Cantidad",
                 title="Constitution location",
                 color="Cantidad",
                 color_continuous_scale="Blues",
                 text="Cantidad",
-                template="plotly_white",
-                labels={campo_const: "Location", "Cantidad": "Number of companies"}
+                template="plotly_white"
             )
 
-            # --- LÓGICA DE BOTONES PARA FIG_CONST ---
+            # --- LÓGICA DE BOTONES ---
             const_buttons = []
-            status_list = df_const["stage_bonito"].dropna().unique().tolist()
-
+            
             # Botón "Todos"
             const_buttons.append(dict(
                 method="restyle",
                 label="Todos",
                 args=[{
-                    "x": [df_const_all[campo_const]],
-                    "y": [df_const_all["Cantidad"]],
-                    "text": [df_const_all["Cantidad"]],
-                    "marker.color": [df_const_all["Cantidad"]] # Para que el gradiente de color se actualice
+                    "x": [df_all[campo_const].tolist()],
+                    "y": [df_all["Cantidad"].tolist()],
+                    "text": [df_all["Cantidad"].tolist()],
+                    "marker.color": [df_all["Cantidad"].tolist()] # Actualiza el degradado
                 }]
             ))
 
             # Botones por Status
+            status_list = df_const["stage_bonito"].dropna().unique().tolist()
             for status in status_list:
                 df_filtered = df_const[df_const["stage_bonito"] == status]
-                df_temp = df_filtered.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
+                df_temp = get_const_data(df_filtered)
                 
                 const_buttons.append(dict(
                     method="restyle",
                     label=status,
                     args=[{
-                        "x": [df_temp[campo_const]],
-                        "y": [df_temp["Cantidad"]],
-                        "text": [df_temp["Cantidad"]],
-                        "marker.color": [df_temp["Cantidad"]]
+                        "x": [df_temp[campo_const].tolist()],
+                        "y": [df_temp["Cantidad"].tolist()],
+                        "text": [df_temp["Cantidad"].tolist()],
+                        "marker.color": [df_temp["Cantidad"].tolist()]
                     }]
                 ))
 
-            # 3. Configurar Layout y Menú (Copiando estética de la anterior)
+            # 3. Configurar Layout (Botón y márgenes)
             fig_const.update_layout(
-                updatemenus=[
-                    dict(
-                        buttons=const_buttons,
-                        direction="down",
-                        showactive=True,
-                        x=0.0,
-                        xanchor="left",
-                        y=1.2,
-                        yanchor="top",
-                        bgcolor="white",
-                        bordercolor="#bec8d9"
-                    )
-                ],
-                margin=dict(t=100, b=50, l=40, r=40)
+                updatemenus=[dict(
+                    buttons=const_buttons,
+                    direction="down",
+                    showactive=True,
+                    x=0.0, y=1.25, # Posición arriba a la izquierda
+                    xanchor="left", yanchor="top",
+                    bgcolor="white", bordercolor="#bec8d9"
+                )],
+                margin=dict(t=100, b=50, l=40, r=40),
+                xaxis={'categoryorder':'total descending'},
+                coloraxis_showscale=False,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
             )
 
-            # Estética final
             fig_const.update_traces(textposition='outside', cliponaxis=False)
-            fig_const.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                coloraxis_showscale=False,
-                xaxis={'categoryorder':'total descending'}
-            )
 
             with col1:
                 st.plotly_chart(fig_const, use_container_width=True, config={"displayModeBar": False})
-        else:
-            st.error(f"No se encontró la columna '{campo_const}' en los datos.")
 
         # --- GRÁFICA DE DISTRIBUCIÓN DE FORM SCORE ---
         # --- GRÁFICA DE DISTRIBUCIÓN CONTINUA (KDE) ---
