@@ -198,6 +198,13 @@ st.markdown("")
 with st.spinner("Sincronizando con Attio..."):
     df = get_combined_dataframe()
 
+# KPIs rápidos
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Total Deals", len(df))
+col2.metric("Not Qualified", f"{len(df[df["status"] == "Not qualified"])} ({round(len(df[df["status"] == "Not qualified"])/len(df)*100, 2)} %)")
+col3.metric("Qualified", f"{len(df[df["status"] == "Qualified"])} ({round(len(df[df["status"]=="Qualified"])/len(df)*100, 2)} %)")
+col4.metric("In Play", f"{len(df[df["status"]=="In play"])} ({round(len(df[df["status"]=="In play"])/len(df)*100, 2)} %)")
+
 col_filtro1, col_filtro2, col_espacio = st.columns([0.2, 0.2, 0.6])
 
 if "periodo" not in st.session_state:
@@ -233,7 +240,7 @@ else:
         '648bf97f-8d29-4965-ab20-6b4cc63f37ee': 'Carlota L',
         'c8d13743-d7e8-4e9e-b967-3d8e6ac3750e': 'Lorenzo Hurtado de Saracho',
     }
-
+    st.title("General Metrics")
     # --- 1. NORMALIZACIÓN REAL (Quitar horas de verdad) ---
     # Convertimos a datetime -> quitamos zona horaria -> extraemos solo la FECHA
     df["fecha_limpia"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None).dt.date
@@ -263,15 +270,6 @@ else:
         with cols[i]:
             total = member_count.get(str(user_id), 0)
             st.metric(label=name, value=int(total))
-    
-    st.title("General Metrics")
-
-    # KPIs rápidos
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Deals", len(df))
-    col2.metric("Not Qualified", f"{len(df[df["status"] == "Not qualified"])} ({round(len(df[df["status"] == "Not qualified"])/len(df)*100, 2)} %)")
-    col3.metric("Qualified", f"{len(df[df["status"] == "Qualified"])} ({round(len(df[df["status"]=="Qualified"])/len(df)*100, 2)} %)")
-    col4.metric("In Play", f"{len(df[df["status"]=="In play"])} ({round(len(df[df["status"]=="In play"])/len(df)*100, 2)} %)")
 
     if not df["created_at_y"].empty and "created_at_y" in df.columns and not df["reference_3"].empty and "reference_3" in df.columns:
         cols = st.columns(2)
