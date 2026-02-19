@@ -237,7 +237,7 @@ else:
         '7f0c4189-764d-453a-8d6b-e416adf7583b': 'Raquel Polgrabia',
         '7f35b25b-4398-4f28-bcf3-1bf59c2b04d4': 'Alejandro Perez',
         '8bd199e1-4aac-485c-b70f-a9b7679286d1': 'Diego Navarro',
-        'a50a814f-3434-43ae-80ba-d3377360bde0': 'Carlota Lechere',
+        '648bf97f-8d29-4965-ab20-6b4cc63f37ee': 'Carlota L',
         'c8d13743-d7e8-4e9e-b967-3d8e6ac3750e': 'Lorenzo Hurtado de Saracho',
     }
 
