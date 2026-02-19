@@ -383,18 +383,18 @@ else:
         col1, col2 = st.columns(2)
         campo_const = "constitution_company"
 
-        if campo_const in  df.columns:
+        if campo_const in df.columns:
+            # 1. Preparación de datos (Igual que en la primera gráfica)
             df_const = df.copy()
             df_const[campo_const] = df_const[campo_const].fillna("Sin especificar")
+            # Aseguramos que tenga la columna mapeada
+            df_const["stage_bonito"] = df_const["stage"].map(status_map)
+            
+            # 2. Datos iniciales (Estado "Todos")
+            df_const_all = df_const.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
 
-
-            # Agrupamos y contamos
-            df_const_counts = df_const.groupby(campo_const).size().reset_index(name="Cantidad")
-            df_const_counts = df_const_counts.sort_values("Cantidad", ascending=False)
-
-            # Creamos las gráficas
             fig_const = px.bar(
-                df_const_counts,
+                df_const_all,
                 x=campo_const,
                 y="Cantidad",
                 title="Constitution location",
@@ -402,13 +402,60 @@ else:
                 color_continuous_scale="Blues",
                 text="Cantidad",
                 template="plotly_white",
-                labels={
-                    campo_const: "Location",
-                    "Cantidad": "Number of companies"
-                }
+                labels={campo_const: "Location", "Cantidad": "Number of companies"}
             )
 
-            # 3. Estética
+            # --- LÓGICA DE BOTONES PARA FIG_CONST ---
+            const_buttons = []
+            status_list = df_const["stage_bonito"].dropna().unique().tolist()
+
+            # Botón "Todos"
+            const_buttons.append(dict(
+                method="restyle",
+                label="Todos",
+                args=[{
+                    "x": [df_const_all[campo_const]],
+                    "y": [df_const_all["Cantidad"]],
+                    "text": [df_const_all["Cantidad"]],
+                    "marker.color": [df_const_all["Cantidad"]] # Para que el gradiente de color se actualice
+                }]
+            ))
+
+            # Botones por Status
+            for status in status_list:
+                df_filtered = df_const[df_const["stage_bonito"] == status]
+                df_temp = df_filtered.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
+                
+                const_buttons.append(dict(
+                    method="restyle",
+                    label=status,
+                    args=[{
+                        "x": [df_temp[campo_const]],
+                        "y": [df_temp["Cantidad"]],
+                        "text": [df_temp["Cantidad"]],
+                        "marker.color": [df_temp["Cantidad"]]
+                    }]
+                ))
+
+            # 3. Configurar Layout y Menú (Copiando estética de la anterior)
+            fig_const.update_layout(
+                updatemenus=[
+                    dict(
+                        buttons=const_buttons,
+                        direction="down",
+                        showactive=True,
+                        x=0.0,
+                        xanchor="left",
+                        y=1.2,
+                        yanchor="top",
+                        bgcolor="white",
+                        bordercolor="#bec8d9"
+                    )
+                ],
+                margin=dict(t=100, b=50, l=40, r=40)
+            )
+
+            # Estética final
             fig_const.update_traces(textposition='outside', cliponaxis=False)
             fig_const.update_layout(
                 paper_bgcolor='rgba(0,0,0,0)',
@@ -418,9 +465,9 @@ else:
             )
 
             with col1:
-                st.plotly_chart(fig_const, use_container_width=True)
+                st.plotly_chart(fig_const, use_container_width=True, config={"displayModeBar": False})
         else:
-            st.error(f"No se encontró la columna '{campo_const}' en los datos de Attio.")
+            st.error(f"No se encontró la columna '{campo_const}' en los datos.")
 
         # --- GRÁFICA DE DISTRIBUCIÓN DE FORM SCORE ---
         # --- GRÁFICA DE DISTRIBUCIÓN CONTINUA (KDE) ---
