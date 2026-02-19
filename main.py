@@ -473,7 +473,7 @@ else:
                         df_gf_counts,
                         x='Green Flag',
                         y='Cantidad',
-                        title=f'🟢 Prevalencia de Green Flags',
+                        title=f'🟢 Prevalencia de Green Flags: {len(df[df["green_flags_form"].notna()])}',
                         color='Cantidad',
                         color_continuous_scale='Greens',
                         custom_data=[df_gf_counts['Porcentaje']]
