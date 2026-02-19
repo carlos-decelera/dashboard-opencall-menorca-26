@@ -245,7 +245,7 @@ else:
     }
 
     member_count = df["owner"].value_counts()
-    cols = st.streamlit(5)
+    cols = st.columns(5)
 
     for i, (user_id, name) in enumerate(mapping.items()):
         with cols[i]:
