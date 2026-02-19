@@ -456,13 +456,12 @@ else:
                 )],
                 margin=dict(t=120, b=50, l=40, r=40),
                 xaxis={'categoryorder':'total descending'},
-                yaxis=dict(
-                    range=[0, df_all["Cantidad"].max()*1.1]
-                ),
                 coloraxis_showscale=False,
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)'
             )
+
+            fig_const.update_yaxes(rangemode="tozero", padding=0.1)
 
             fig_const.update_traces(
                 textposition='outside', 
