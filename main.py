@@ -214,6 +214,11 @@ else:
         
 
         # Vamos a poner por cada fuente
+        status_map = {
+            "Leads Menorca 2026": "Deal Flow",
+            "Menorca 2026": "Open Call"
+        }
+
         mapeo_reference = {
             "Mail from Decelera Team": "Marketing",
             "Social media (LinkedIn, X, Instagram...)": "Marketing",
@@ -336,6 +341,86 @@ else:
 
         with cols[0]:
             st.plotly_chart(fig, use_container_width=True)
+
+        # --- PIE CHART DE CATEGORIAS ---
+
+        # 1. Crear la columna con nombres limpios
+        df["stage_bonito"] = df["stage"].map(status_map)
+        # Sacamos la lista de la columna 'stage_bonito'
+        status_list = df["stage_bonito"].dropna().unique().tolist()
+
+        # 2. Datos iniciales (Todos)
+        df_counts_all = df["categoria_reference"].value_counts()
+
+        fig_pie = px.pie(
+            names=df_counts_all.index,
+            values=df_counts_all.values,
+            title='🎯 Distribución por Reference',
+            hole=0.4,
+            color_discrete_sequence=px.colors.qualitative.Safe
+        )
+
+        # --- LÓGICA DE BOTONES INTERNOS ---
+        buttons = []
+
+        # Botón "Todos"
+        buttons.append(dict(
+            method="restyle",
+            label="Todos",
+            args=[{"values": [df_counts_all.values], "labels": [df_counts_all.index]}]
+        ))
+
+        # Botones por Status
+        for status in status_list:
+            # FILTRAMOS por la columna 'stage_bonito' para que coincida con el texto del botón
+            df_temp = df[df["stage_bonito"] == status]["categoria_reference"].value_counts()
+            
+            buttons.append(dict(
+                method="restyle",
+                label=status,
+                args=[{"values": [df_temp.values], "labels": [df_temp.index]}]
+            ))
+
+        # 3. Configurar Layout y Menú
+        fig_pie.update_layout(
+            updatemenus=[
+                dict(
+                    buttons=buttons,
+                    direction="down",
+                    showactive=True,
+                    x=1.0,      # 0.0 es la izquierda del gráfico
+                    xanchor="left",
+                    y=1.2,      # Un poco más arriba para que no tape el título
+                    yanchor="top",
+                    bgcolor="white",
+                    bordercolor="#bec8d9"
+                )
+            ],
+            margin=dict(t=100, b=50, l=40, r=150) # Aumentamos margen superior (t) para el botón
+        )
+
+        # --- Estética ---
+        fig_pie.update_traces(
+            textinfo='percent+value',
+            textposition='auto',
+            marker=dict(line=dict(color="#000000", width=1)),
+            textfont=dict(color="black", size=14)
+        )
+
+        fig_pie.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            legend=dict(
+                orientation="v",
+                yanchor="middle",
+                y=0.5,
+                xanchor="left",
+                x=1.1
+            )
+        )
+
+        with cols[1]:
+            st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
 
         # Vamos a hacer unas barras para ver los paises de los que vienen
         col1, col2 = st.columns(2)
