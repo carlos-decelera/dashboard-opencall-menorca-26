@@ -397,6 +397,7 @@ else:
                 df_const_counts,
                 x=campo_const,
                 y="Cantidad",
+                title="Constitution location",
                 color="Cantidad",
                 color_continuous_scale="Blues",
                 text="Cantidad",
