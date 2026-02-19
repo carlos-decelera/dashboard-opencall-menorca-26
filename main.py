@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.figure_factory as ff
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Attio Deal Dashboard", layout="wide")
@@ -379,68 +380,66 @@ else:
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
 
         # --- GRÁFICA DE DISTRIBUCIÓN DE FORM SCORE ---
-        st.title("📊 Distribución de Calidad (Form Score)")
+        # --- GRÁFICA DE DISTRIBUCIÓN CONTINUA (KDE) ---
+        st.title("📈 Curva de Distribución de Calidad")
 
-        # 1. Filtrado de datos: Quitamos ceros y nulos
+        # 1. Limpieza y preparación (igual que antes)
         df_score = df[df["form_score"].notna()].copy()
         df_score["form_score"] = pd.to_numeric(df_score["form_score"], errors="coerce")
         df_score = df_score[df_score["form_score"] > 0]
 
         if df_score.empty:
-            st.warning("No hay datos de 'Form Score' para mostrar (excluyendo 0 y nulos).")
+            st.warning("No hay suficientes datos para generar la curva de distribución.")
         else:
-            total_scores = len(df_score)
-
-            # 2. Segmentación para cálculos
-            seg_bajo = df_score[df_score["form_score"] < 30]
-            seg_medio = df_score[(df_score["form_score"] >= 30) & (df_score["form_score"] < 65)]
-            seg_alto = df_score[df_score["form_score"] >= 65]
-
-            # 3. Creación del Histograma
-            fig_score = px.histogram(
-                df_score, 
-                x="form_score",
-                nbins=20,
-                title="Distribución de Puntuaciones (Excluyendo 0)",
-                labels={"form_score": "Puntuación (puntos)"},
-                color_discrete_sequence=["#1FD0EF"],
-                template="plotly_white"
+            # Datos para la curva
+            hist_data = [df_score["form_score"]]
+            group_labels = ['Form Score']
+            
+            # 2. Crear distplot con curva de distribución
+            # show_hist=False si solo quieres la línea, show_curve=True es la clave
+            fig_dist = ff.create_distplot(
+                hist_data, group_labels, 
+                show_hist=True, # He dejado el histograma de fondo muy suave para dar contexto
+                show_rug=False, 
+                colors=['#1FD0EF']
             )
 
-            # 4. Añadir líneas verticales discontinuas
-            fig_score.add_vline(x=30, line_dash="dash", line_color="red", line_width=2)
-            fig_score.add_vline(x=65, line_dash="dash", line_color="green", line_width=2)
+            # 3. Cálculos de segmentos para las etiquetas
+            total = len(df_score)
+            n_bajo = len(df_score[df_score["form_score"] < 30])
+            n_medio = len(df_score[(df_score["form_score"] >= 30) & (df_score["form_score"] < 65)])
+            n_alto = len(df_score[df_score["form_score"] >= 65])
 
-            # 5. Añadir anotaciones de texto (Conteo y %)
-            # Definimos los segmentos para el bucle de anotaciones
+            # 4. Añadir líneas verticales
+            fig_dist.add_vline(x=30, line_dash="dash", line_color="#ef4444", line_width=2)
+            fig_dist.add_vline(x=65, line_dash="dash", line_color="#22c55e", line_width=2)
+
+            # 5. Etiquetas de segmentos
             segmentos = [
-                {"x_pos": 15, "count": len(seg_bajo), "label": "Bajo"},
-                {"x_pos": 47, "count": len(seg_medio), "label": "Medio"},
-                {"x_pos": 82, "count": len(seg_alto), "label": "Alto"}
+                {"x": 15, "n": n_bajo, "lbl": "Bajo"},
+                {"x": 47, "n": n_medio, "lbl": "Medio"},
+                {"x": 82, "n": n_alto, "lbl": "Alto"}
             ]
 
             for s in segmentos:
-                pct = (s["count"] / total_scores) * 100 if total_scores > 0 else 0
-                fig_score.add_annotation(
-                    x=s["x_pos"],
-                    y=0.9, # Posición vertical (90% de la altura del gráfico)
-                    yref="paper",
-                    text=f"<b>{s['label']}</b><br>{s['count']} deals<br>({pct:.1f}%)",
-                    showarrow=False,
-                    font=dict(size=14, color="black"),
-                    bgcolor="rgba(255, 255, 255, 0.7)"
+                pct = (s["n"] / total) * 100
+                fig_dist.add_annotation(
+                    x=s["x"], y=0.85, yref="paper",
+                    text=f"<b>{s['lbl']}</b><br>{s['n']} deals<br>{pct:.1f}%",
+                    showarrow=False, font=dict(size=13)
                 )
 
-            # Estética final
-            fig_score.update_layout(
-                bargap=0.1,
+            # 6. Estética final para que encaje con tu dashboard
+            fig_dist.update_layout(
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
-                yaxis_title="Cantidad de Deals",
-                xaxis=dict(range=[0, 100], dtick=10)
+                showlegend=False,
+                margin=dict(t=40, b=40, l=20, r=20),
+                xaxis=dict(title="Puntuación", range=[0, 100], dtick=10),
+                yaxis=dict(title="Densidad de probabilidad")
             )
 
-            st.plotly_chart(fig_score, use_container_width=True)
+            st.plotly_chart(fig_dist, use_container_width=True)
 
         st.title("📊 Funnel de Startups por Reference con Objetivos")
         st.markdown("Las referencias se han agrupado en función de los objetivos definidos:<br> - Marketing: Mail from Decelera Team, Social media, Press, Google, Decelera Newsletter<br> - Referral: Referral<br> - Outreach: Event, Contacted via LinkedIn", unsafe_allow_html=True)
