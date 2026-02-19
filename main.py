@@ -404,7 +404,7 @@ else:
             )
 
             # 3. Estética
-            fig_const.update_traces(textposition='outside')
+            fig_const.update_traces(textposition='outside', cliponaxis=False)
             fig_const.update_layout(
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
