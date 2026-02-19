@@ -241,7 +241,10 @@ else:
         'c8d13743-d7e8-4e9e-b967-3d8e6ac3750e': 'Lorenzo Hurtado de Saracho',
     }
 
-    member_count = df["owner"].value_counts()
+    if st.session_status.periodo = "Semana":
+        member_count = df[df["created_at_y_dt"] != "16-02-2016"]["owner"].value_counts()
+    else:
+        member_count = df["owner"].value_counts()
     cols = st.columns(5)
 
     for i, (user_id, name) in enumerate(member_map.items()):
