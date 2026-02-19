@@ -245,7 +245,7 @@ else:
         # Filtramos usando una fecha real de pandas
         fecha_filtro = pd.to_datetime("2016-02-16")
         mask = df["created_at_y_dt"].dt.date != fecha_filtro.date()
-        member_count = df.loc[mask, "owner"].value_counts()
+        member_count = df.loc["owner"].value_counts()
     else:
         member_count = df["owner"].value_counts()
 
