@@ -387,7 +387,7 @@ else:
         df_score["form_score"] = pd.to_numeric(df_score["form_score"], errors="coerce")
         df_score = df_score[df_score["form_score"] > 0]
 
-        st.title(f"📈 Form Scoring de las aplicaciones: {len(df[df["form_score"] > 0])} aplicaciones")
+        st.title(f"📈 Form Scoring de las aplicaciones: {len(df_score)} aplicaciones")
 
 
         if df_score.empty:
