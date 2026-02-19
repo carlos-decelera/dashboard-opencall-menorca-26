@@ -399,7 +399,7 @@ else:
             # show_hist=False si solo quieres la línea, show_curve=True es la clave
             fig_dist = ff.create_distplot(
                 hist_data, group_labels, 
-                show_hist=True, # He dejado el histograma de fondo muy suave para dar contexto
+                show_hist=False, # He dejado el histograma de fondo muy suave para dar contexto
                 show_rug=False, 
                 colors=['#1FD0EF']
             )
