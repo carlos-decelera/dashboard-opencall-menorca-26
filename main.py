@@ -346,7 +346,7 @@ else:
                     direction="down",
                     showactive=True,
                     x=0.0,      # 0.0 es la izquierda del gráfico
-                    xanchor="left",
+                    xanchor="right",
                     y=1.2,      # Un poco más arriba para que no tape el título
                     yanchor="top",
                     bgcolor="white",
@@ -447,7 +447,7 @@ else:
                     direction="down",
                     showactive=True,
                     x=0.0, y=1.25, # Posición arriba a la izquierda
-                    xanchor="left", yanchor="top",
+                    xanchor="right", yanchor="top",
                     bgcolor="white", bordercolor="#bec8d9"
                 )],
                 margin=dict(t=100, b=50, l=40, r=40),
