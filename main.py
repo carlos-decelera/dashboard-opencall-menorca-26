@@ -381,7 +381,7 @@ else:
 
         # --- GRÁFICA DE DISTRIBUCIÓN DE FORM SCORE ---
         # --- GRÁFICA DE DISTRIBUCIÓN CONTINUA (KDE) ---
-        st.title(f"📈 Form Scoring de las aplicaciones: {len(df[df["status"] != "Not qualified"])} aplicaciones cualificadas")
+        st.title(f"📈 Form Scoring de las aplicaciones: {len(df[df["form_score"].notna()])} aplicaciones")
 
         # 1. Limpieza y preparación (igual que antes)
         df_score = df[df["form_score"].notna()].copy()
