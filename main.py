@@ -345,7 +345,7 @@ else:
                     buttons=buttons,
                     direction="down",
                     showactive=True,
-                    x=0.0,      # 0.0 es la izquierda del gráfico
+                    x=1.0,      # 0.0 es la izquierda del gráfico
                     xanchor="right",
                     y=1.2,      # Un poco más arriba para que no tape el título
                     yanchor="top",
@@ -446,7 +446,7 @@ else:
                     buttons=const_buttons,
                     direction="down",
                     showactive=True,
-                    x=0.0, y=1.25, # Posición arriba a la izquierda
+                    x=1.0, y=1.25, # Posición arriba a la izquierda
                     xanchor="right", yanchor="top",
                     bgcolor="white", bordercolor="#bec8d9"
                 )],
