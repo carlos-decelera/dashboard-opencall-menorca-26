@@ -378,7 +378,71 @@ else:
         with cols[1]:
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
 
-        st.title("📊 Funnel de Aplicaciones por Reference con Objetivos")
+        # --- GRÁFICA DE DISTRIBUCIÓN DE FORM SCORE ---
+        st.title("📊 Distribución de Calidad (Form Score)")
+
+        # 1. Filtrado de datos: Quitamos ceros y nulos
+        df_score = df[df["form_score"].notna()].copy()
+        df_score["form_score"] = pd.to_numeric(df_score["form_score"], errors="coerce")
+        df_score = df_score[df_score["form_score"] > 0]
+
+        if df_score.empty:
+            st.warning("No hay datos de 'Form Score' para mostrar (excluyendo 0 y nulos).")
+        else:
+            total_scores = len(df_score)
+
+            # 2. Segmentación para cálculos
+            seg_bajo = df_score[df_score["form_score"] < 30]
+            seg_medio = df_score[(df_score["form_score"] >= 30) & (df_score["form_score"] < 65)]
+            seg_alto = df_score[df_score["form_score"] >= 65]
+
+            # 3. Creación del Histograma
+            fig_score = px.histogram(
+                df_score, 
+                x="form_score",
+                nbins=20,
+                title="Distribución de Puntuaciones (Excluyendo 0)",
+                labels={"form_score": "Puntuación (puntos)"},
+                color_discrete_sequence=["#1FD0EF"],
+                template="plotly_white"
+            )
+
+            # 4. Añadir líneas verticales discontinuas
+            fig_score.add_vline(x=30, line_dash="dash", line_color="red", line_width=2)
+            fig_score.add_vline(x=65, line_dash="dash", line_color="green", line_width=2)
+
+            # 5. Añadir anotaciones de texto (Conteo y %)
+            # Definimos los segmentos para el bucle de anotaciones
+            segmentos = [
+                {"x_pos": 15, "count": len(seg_bajo), "label": "Bajo"},
+                {"x_pos": 47, "count": len(seg_medio), "label": "Medio"},
+                {"x_pos": 82, "count": len(seg_alto), "label": "Alto"}
+            ]
+
+            for s in segmentos:
+                pct = (s["count"] / total_scores) * 100 if total_scores > 0 else 0
+                fig_score.add_annotation(
+                    x=s["x_pos"],
+                    y=0.9, # Posición vertical (90% de la altura del gráfico)
+                    yref="paper",
+                    text=f"<b>{s['label']}</b><br>{s['count']} deals<br>({pct:.1f}%)",
+                    showarrow=False,
+                    font=dict(size=14, color="black"),
+                    bgcolor="rgba(255, 255, 255, 0.7)"
+                )
+
+            # Estética final
+            fig_score.update_layout(
+                bargap=0.1,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                yaxis_title="Cantidad de Deals",
+                xaxis=dict(range=[0, 100], dtick=10)
+            )
+
+            st.plotly_chart(fig_score, use_container_width=True)
+
+        st.title("📊 Funnel de Startups por Reference con Objetivos")
         st.markdown("Las referencias se han agrupado en función de los objetivos definidos:<br> - Marketing: Mail from Decelera Team, Social media, Press, Google, Decelera Newsletter<br> - Referral: Referral<br> - Outreach: Event, Contacted via LinkedIn", unsafe_allow_html=True)
 
         # --- CONFIGURACIÓN ---
@@ -512,7 +576,7 @@ else:
         all_reasons = []
         for entry in df_not_qual['red_flags_form_7'].dropna():
             # Usamos set() para que si una empresa tiene escrito dos veces lo mismo, solo cuente una vez
-            reasons = list(set([r.strip() for r in str(entry).split('\n') if r.strip()]))
+            reasons = list(set([r.strip() for r in str(entry).split('\n') if (r.strip() and "🔴" in r)]))
             all_reasons.extend(reasons)
 
         # 3. Creamos el conteo
@@ -551,7 +615,7 @@ else:
             coloraxis_showscale=False
         )
 
-        with col1:
+        with col2:
             st.plotly_chart(fig_redflags, use_container_width=True)
 
         df_reasons_not_qual = df_not_qual.groupby("reason").size().reset_index()
@@ -586,5 +650,5 @@ else:
             coloraxis_showscale=False
         )
 
-        with col2:
+        with col1:
             st.plotly_chart(fig_not_qual, use_container_width=True)
