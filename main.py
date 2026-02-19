@@ -346,7 +346,7 @@ else:
                     direction="down",
                     showactive=True,
                     x=1.0,      # 0.0 es la izquierda del gráfico
-                    xanchor="right",
+                    xanchor="left",
                     y=1.2,      # Un poco más arriba para que no tape el título
                     yanchor="top",
                     bgcolor="white",
