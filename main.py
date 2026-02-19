@@ -391,6 +391,7 @@ else:
             # Agrupamos y contamos
             df_const_counts = df_const.groupby(campo_const).size().reset_index(name="Cantidad")
             df_const_counts = df_const_counts.sort_values("Cantidad", ascending=False)
+            df_const_counts.columns = ["Location", "Cantidad"]
 
             # Creamos las gráficas
             fig_const = px.bar(
