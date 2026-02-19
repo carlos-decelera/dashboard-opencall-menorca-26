@@ -241,13 +241,14 @@ else:
         'c8d13743-d7e8-4e9e-b967-3d8e6ac3750e': 'Lorenzo Hurtado de Saracho',
     }
     st.title("General Metrics")
-    df["fecha_limpia"] = pd.to_datetime(df["created_at_y"]).dt.date
+    df["fecha_limpia"] = pd.to_datetime(df["created_at_y"], utc=True).dt.tz_localize(None).dt.date
     fecha_bulk = pd.to_datetime("2026-02-16").date()
 
     if st.session_state.periodo == "Semana":
         df_filtrado = df[df["fecha_limpia"] != fecha_bulk].copy()
     else:
         df_filtrado = df.copy()
+        
     counts = df["owner"].astype(str).value_counts()
 
     cols = st.columns(len(member_map))
