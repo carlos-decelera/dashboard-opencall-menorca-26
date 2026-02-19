@@ -247,7 +247,7 @@ else:
     member_count = df["owner"].value_counts()
     cols = st.columns(5)
 
-    for i, (user_id, name) in enumerate(mapping.items()):
+    for i, (user_id, name) in enumerate(member_map.items()):
         with cols[i]:
             total = counts.get(user_id, 0)
             st.metric(label=name, value=total)
