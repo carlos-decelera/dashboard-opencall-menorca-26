@@ -457,6 +457,7 @@ else:
                 margin=dict(t=120, b=50, l=40, r=40),
                 xaxis={'categoryorder':'total descending'},
                 coloraxis_showscale=False,
+                cliponaxis=False,
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)'
             )
