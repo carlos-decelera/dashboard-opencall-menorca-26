@@ -251,11 +251,6 @@ else:
     else:
         df_filtrado = df.copy()
 
-    # Mostrar diferencia de filas para saber si está funcionando
-    filas_quitadas = len(df) - len(df_filtrado)
-    if st.session_state.periodo == "Semana":
-        st.caption(f"Filas excluidas (Bulk 16 Feb): {filas_quitadas}")
-
     counts = df_filtrado[df["status"] != "Not qualified"]["owner"].astype(str).value_counts()
 
     cols = st.columns(len(member_map))
