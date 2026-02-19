@@ -695,9 +695,7 @@ else:
             # Nota: Aquí sumamos los que están en Qualified puro + los acumulados
             mask_qual = (
                 (df_cat["status"] == "Qualified") | 
-                (df_cat["reason"] == "Signals (Qualified)") |
-                (df_cat["reason"].isna() & (df_cat["status"] == "Qualified"))
-            )
+                (df_cat["reason"] == "Signals (Qualified)"))
             val_qual = len(df_cat[mask_qual]) + val_in_play
 
             pct_in_play = round(val_in_play / val_qual * 100, 2) if val_qual > 0 else 0
