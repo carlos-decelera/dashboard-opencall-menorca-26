@@ -219,7 +219,7 @@ if st.session_state.periodo == "Semana":
 
     # Calculamos el lunes de la semana actual
     hoy = pd.Timestamp.now()
-    lunes_actual = (hoy - pd.Timedelta(days=hoy.weekday())).replace(hour=0, minute=0, second=0, microsecon=0)
+    lunes_actual = (hoy - pd.Timedelta(days=hoy.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
 
     df = df[df["created_at_y_dt"] >= lunes_actual].copy()
 
