@@ -289,7 +289,7 @@ else:
             "Other": "Otros"
         }
 
-        df["categoria_reference"] = df["reference_3"].map(mapeo_reference).dropna()
+        df["categoria_reference"] = df["reference_3"].map(mapeo_reference).fillna("No Especificado")
 
         # VAMOS A HACER UNA GRAFICA DE APLICACIONES POR DIA ==========================
         # --- 1. PREPARACIÓN DE DATOS BASE ---
