@@ -318,13 +318,7 @@ else:
             # Agrupación Total
             df_total = df_f.groupby("fecha").size().reset_index(name="aplicaciones")
             
-            # --- RESTA DE 268 AL DÍA ESPECÍFICO ---
-            fecha_target = pd.to_datetime("2026-02-16").date()
-            # Buscamos si existe esa fecha en el conteo y restamos
-            mask = df_total["fecha"] == fecha_target
-            if mask.any():
-                # Restamos 268, pero nos aseguramos de no bajar de 0
-                df_total.loc[mask, "aplicaciones"] = (df_total.loc[mask, "aplicaciones"] - 274).clip(lower=0)
+            
             
             df_total = df_total.sort_values("fecha")
             
