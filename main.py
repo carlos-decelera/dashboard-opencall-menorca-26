@@ -391,7 +391,7 @@ else:
             ))
 
         # --- 5. LAYOUT Y ESTÉTICA ---
-        total_acumulado = len(df_filtrado)
+        total_acumulado = len(df_filtrado) - 268
 
         fig.update_layout(
             updatemenus=[dict(
