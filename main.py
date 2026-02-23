@@ -370,6 +370,8 @@ else:
             ]
         ))
 
+        status_list = ["Deal Flow", "Open Call"]
+
         for status in status_list:
             df_t, df_c = get_traces_for_status(status)
             total_status = df_t["aplicaciones"].sum()
