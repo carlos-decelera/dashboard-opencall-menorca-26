@@ -400,7 +400,7 @@ else:
                 x=1.0, xanchor="right", y=1.2, yanchor="top",
                 bgcolor="white", bordercolor="#bec8d9"
             )],
-            title=f'📈 Evolución de Aplicaciones (Total: {total_acumulado})',
+            title=f'📈 Compañías a lo largo del tiempo (Total: {total_acumulado})',
             hovermode='x unified',
             xaxis=dict(type='date', tickformat='%d %b'),
             yaxis=dict(rangemode="tozero"),
