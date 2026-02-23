@@ -205,7 +205,7 @@ col2.metric("Not Qualified", f"{len(df[df["status"] == "Not qualified"])} ({roun
 col3.metric("Qualified", f"{len(df[df["status"] == "Qualified"])} ({round(len(df[df["status"]=="Qualified"])/len(df)*100, 2)} %)")
 col4.metric("In Play", f"{len(df[df["status"]=="In play"])} ({round(len(df[df["status"]=="In play"])/len(df)*100, 2)} %)")
 
-col_filtro1, col_filtro2, col_espacio = st.columns([0.2, 0.2, 0.6])
+col_filtro1, col_filtro2, col_filtro3, col_espacio = st.columns([0.2, 0.2, 0.2, 0.4])
 
 if "periodo" not in st.session_state:
     st.session_state.periodo = "Todo"
@@ -220,6 +220,11 @@ with col_filtro2:
         st.session_state.periodo="Semana"
         st.rerun()
 
+with col_filtro3:
+    if st.button("📅 Semana Anterior", use_container_width=True):
+        st.session_state.periodo = "Semana Anterior"
+        st.rerun()
+
 # Logica de filtrado
 if st.session_state.periodo == "Semana":
     df["created_at_y_dt"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None)
@@ -229,6 +234,13 @@ if st.session_state.periodo == "Semana":
     lunes_actual = (hoy - pd.Timedelta(days=hoy.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
 
     df = df[df["created_at_y_dt"] >= lunes_actual].copy()
+    
+elif st.session_state.periodo == "Semana Anterior":
+    df["created_at_y_dt"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None)
+    hoy = pd.Timestamp.now()
+    lunes_actual = (hoy - pd.Timedelta(days=hoy.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    lunes_anterior = lunes_actual - pd.Timedelta(weeks=1)
+    df = df[(df["created_at_y_dt"] >= lunes_anterior) & (df["created_at_y_dt"] < lunes_actual)].copy()
 
 if df.empty:
     st.warning("No se encontraron datos para los filtros aplicados.")
