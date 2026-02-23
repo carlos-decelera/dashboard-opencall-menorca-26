@@ -353,28 +353,29 @@ else:
         ))
 
         # --- 4. CONSTRUCCIÓN DE BOTONES ---
-        line_buttons = []
-        status_list = ["Deal Flow", "Open Call"] # Tus filtros deseados
+        total_acumulado = df_total_all["aplicaciones"].sum()
 
-        # Botón para "Todos"
+        line_buttons = []
+
+        # Botón "Todos"
         line_buttons.append(dict(
-            method="restyle",
+            method="update",
             label="Todos",
-            args=[{
-                "x": [df_cat_all[df_cat_all["categoria_reference"]==c]["fecha"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["fecha"]],
-                "y": [df_cat_all[df_cat_all["categoria_reference"]==c]["count"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["aplicaciones"]]
-            }]
+            args=[
+                {
+                    "x": [df_cat_all[df_cat_all["categoria_reference"]==c]["fecha"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["fecha"]],
+                    "y": [df_cat_all[df_cat_all["categoria_reference"]==c]["count"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["aplicaciones"]]
+                },
+                {"title.text": f'📈 Compañías a lo largo del tiempo (Total: {total_acumulado})'}
+            ]
         ))
 
         for status in status_list:
             df_t, df_c = get_traces_for_status(status)
+            total_status = df_t["aplicaciones"].sum()
             
-            # Extraemos los datos para cada categoría existente en la figura
-            # Es importante mantener el orden de las trazas originales
             new_x = []
             new_y = []
-            
-            # Trazas de categorías (px.line crea una traza por color)
             for trace in fig.data:
                 if trace.name == "Total":
                     new_x.append(df_t["fecha"])
@@ -385,13 +386,13 @@ else:
                     new_y.append(filtered_cat["count"])
 
             line_buttons.append(dict(
-                method="restyle",
+                method="update",
                 label=status,
-                args=[{"x": new_x, "y": new_y}]
+                args=[
+                    {"x": new_x, "y": new_y},
+                    {"title.text": f'📈 Compañías a lo largo del tiempo (Total: {total_status})'}
+                ]
             ))
-
-        # --- 5. LAYOUT Y ESTÉTICA ---
-        total_acumulado = len(df_filtrado) - 268
 
         fig.update_layout(
             updatemenus=[dict(
