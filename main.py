@@ -589,7 +589,7 @@ else:
         # --- GRÁFICA DE DISTRIBUCIÓN DE FORM SCORE ---
         # --- GRÁFICA DE DISTRIBUCIÓN CONTINUA (KDE) ---
         
-        # 1. Limpieza y preparación (igual que antes)
+        # --- GRÁFICA DE DISTRIBUCIÓN DE FORM SCORE ---
         df_score = df[df["form_score"].notna()].copy()
         df_score["form_score"] = pd.to_numeric(df_score["form_score"], errors="coerce")
         df_score = df_score[df_score["form_score"] > 0]
@@ -597,33 +597,36 @@ else:
         st.title(f"📈 Form Scoring de las aplicaciones: {len(df_score)} aplicaciones")
         col1, col2 = st.columns(2)
 
-        if df_score.empty:
-            st.warning("No hay suficientes datos para generar la curva de distribución.")
+        # --- VALIDACIÓN CRÍTICA PARA EVITAR EL VALUEERROR ---
+        # Verificamos que haya más de un elemento y que no sean todos iguales
+        if len(df_score) <= 1 or df_score["form_score"].nunique() <= 1:
+            with col1:
+                st.warning("No hay suficientes datos variados para generar la curva de distribución (se requieren al menos 2 valores distintos).")
+                # Opcional: Mostrar un histograma simple de Plotly Express en su lugar que no falla
+                if not df_score.empty:
+                    fig_simple = px.histogram(df_score, x="form_score", title="Distribución Simple (Sin curva)")
+                    st.plotly_chart(fig_simple, use_container_width=True)
         else:
-            # Datos para la curva
+            # Si hay datos suficientes, ejecutamos el distplot original
             hist_data = [df_score["form_score"]]
             group_labels = ['Form Score']
             
-            # 2. Crear distplot con curva de distribución
-            # show_hist=False si solo quieres la línea, show_curve=True es la clave
             fig_dist = ff.create_distplot(
                 hist_data, group_labels, 
-                show_hist=False, # He dejado el histograma de fondo muy suave para dar contexto
+                show_hist=False, 
                 show_rug=False, 
                 colors=['#1FD0EF']
             )
 
-            # 3. Cálculos de segmentos para las etiquetas
+            # ... (el resto de tu lógica de add_vline y add_annotation se mantiene igual)
             total = len(df_score)
             n_bajo = len(df_score[df_score["form_score"] < 30])
             n_medio = len(df_score[(df_score["form_score"] >= 30) & (df_score["form_score"] < 65)])
             n_alto = len(df_score[df_score["form_score"] >= 65])
 
-            # 4. Añadir líneas verticales
             fig_dist.add_vline(x=30, line_dash="dash", line_color="#ef4444", line_width=2)
             fig_dist.add_vline(x=65, line_dash="dash", line_color="#22c55e", line_width=2)
 
-            # 5. Etiquetas de segmentos
             segmentos = [
                 {"x": 15, "n": n_bajo, "lbl": "Bajo"},
                 {"x": 47, "n": n_medio, "lbl": "Medio"},
@@ -638,15 +641,15 @@ else:
                     showarrow=False, font=dict(size=13)
                 )
 
-            # 6. Estética final para que encaje con tu dashboard
             fig_dist.update_layout(
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 showlegend=False,
                 margin=dict(t=40, b=40, l=20, r=20),
                 xaxis=dict(title="Puntuación", range=[0, 100], dtick=10),
-                yaxis=dict(title="Densidad de probabilidad")
+                yaxis=dict(title="Densidad")
             )
+            
             with col1:
                 st.plotly_chart(fig_dist, use_container_width=True)
 
