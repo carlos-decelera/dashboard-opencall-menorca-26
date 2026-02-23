@@ -391,6 +391,8 @@ else:
             ))
 
         # --- 5. LAYOUT Y ESTÉTICA ---
+        total_acumulado = df_total["aplicaciones"].sum()
+
         fig.update_layout(
             updatemenus=[dict(
                 buttons=line_buttons,
@@ -398,7 +400,7 @@ else:
                 x=1.0, xanchor="right", y=1.2, yanchor="top",
                 bgcolor="white", bordercolor="#bec8d9"
             )],
-            title='📈 Evolución de Aplicaciones: Reference vs Total',
+            title=f'📈 Evolución de Aplicaciones (Total: {total_acumulado})',
             hovermode='x unified',
             xaxis=dict(type='date', tickformat='%d %b'),
             yaxis=dict(rangemode="tozero"),
