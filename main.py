@@ -391,7 +391,7 @@ else:
             ))
 
         # --- 5. LAYOUT Y ESTÉTICA ---
-        total_acumulado = df_total_all["aplicaciones"].sum()
+        total_acumulado = len(df_filtrado)
 
         fig.update_layout(
             updatemenus=[dict(
