@@ -408,7 +408,7 @@ for i, etapa in enumerate(ORDEN_ESTADOS):
         st.plotly_chart(fig_ind, use_container_width=True, key=f"funnel_vfinal_{i}_{t_actual}")
 
 # ==============================================================================
-# SECCIÓN: DESGLOSE DE NOT QUALIFIED (CON KEYS CORREGIDAS)
+# SECCIÓN: DESGLOSE DE NOT QUALIFIED (RESTURACIÓN DE ESTILO ORIGINAL)
 # ==============================================================================
 
 st.title("🚫 Desglose de los 'Not Qualified'")
@@ -417,17 +417,34 @@ df_not_qual = df[df['status'].str.contains("Not qualified", case=False, na=False
 total_nq = len(df_not_qual)
 
 if total_nq > 0:
-    # 1. Motivos (Reason)
+    # --- 1. Motivos Not Qualified (Reason) ---
     df_rs = df_not_qual.groupby("reason").size().reset_index(name="conteo")
     df_rs["porcentaje"] = (df_rs["conteo"] / total_nq) * 100
-    fig_rs = px.bar(df_rs, x="reason", y="conteo", title="Motivos de 'Not Qualified'", color="conteo", color_continuous_scale="Reds", custom_data=[df_rs["porcentaje"]])
-    fig_rs.update_traces(texttemplate='%{y}<br>(%{customdata[0]:.1f}%)', textposition='outside')
-    fig_rs.update_layout(margin=dict(t=80, b=120), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
+    
+    fig_rs = px.bar(df_rs, x="reason", y="conteo", title="Motivos de 'Not Qualified'", 
+                    color="conteo", color_continuous_scale="Reds", 
+                    custom_data=[df_rs["porcentaje"]])
+    
+    fig_rs.update_traces(
+        texttemplate='%{y}<br>(%{customdata[0]:.1f}%)', 
+        textposition='outside', 
+        textfont=dict(color='black', size=12), 
+        cliponaxis=False # Restaurado
+    )
+    
+    fig_rs.update_layout(
+        yaxis=dict(range=[0, df_rs['conteo'].max() * 1.2]), # Espacio para el texto
+        xaxis=dict(tickangle=45, automargin=True), 
+        margin=dict(t=80, b=120), 
+        paper_bgcolor='rgba(0,0,0,0)', 
+        plot_bgcolor='rgba(0,0,0,0)', 
+        coloraxis_showscale=False
+    )
     
     with cols_nq[0]: 
-        st.plotly_chart(fig_rs, use_container_width=True, key=f"nq_reason_chart_{total_nq}")
+        st.plotly_chart(fig_rs, use_container_width=True, key=f"nq_reason_final_{total_nq}")
 
-    # 2. Red Flags
+    # --- 2. Red Flags de Tesis ---
     all_rf = []
     for entry in df_not_qual['red_flags_form_7'].dropna(): 
         all_rf.extend(list(set([r.strip() for r in str(entry).split('\n') if "🛑" in r])))
@@ -435,8 +452,30 @@ if total_nq > 0:
     if all_rf:
         df_rf = pd.Series(all_rf).value_counts().reset_index()
         df_rf.columns = ['Motivo', 'Cantidad']
-        fig_rf = px.bar(df_rf, x='Motivo', y='Cantidad', title='🚫 % Red Flags de Tesis', color='Cantidad', color_continuous_scale='Reds')
-        fig_rf.update_layout(margin=dict(t=80, b=120), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
+        df_rf['Porcentaje'] = (df_rf['Cantidad'] / total_nq) * 100
+        
+        fig_rf = px.bar(df_rf, x='Motivo', y='Cantidad', title='🚫 % Red Flags de Tesis', 
+                        color='Cantidad', color_continuous_scale='Reds', 
+                        custom_data=[df_rf['Porcentaje']])
+        
+        fig_rf.update_traces(
+            texttemplate='%{y}<br>(%{customdata[0]:.1f}%)', # Restaurado
+            textposition='outside', 
+            textfont=dict(color='black', size=12), 
+            cliponaxis=False # Restaurado
+        )
+        
+        fig_rf.update_layout(
+            yaxis=dict(range=[0, df_rf['Cantidad'].max() * 1.2]), 
+            xaxis=dict(tickangle=45, automargin=True), 
+            margin=dict(t=80, b=120), 
+            paper_bgcolor='rgba(0,0,0,0)', 
+            plot_bgcolor='rgba(0,0,0,0)', 
+            coloraxis_showscale=False
+        )
         
         with cols_nq[1]: 
-            st.plotly_chart(fig_rf, use_container_width=True, key=f"nq_rf_chart_{len(all_rf)}")
+            st.plotly_chart(fig_rf, use_container_width=True, key=f"nq_rf_final_{len(all_rf)}")
+    else:
+        with cols_nq[1]:
+            st.info("No hay Red Flags registradas.")
