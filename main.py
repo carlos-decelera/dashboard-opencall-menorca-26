@@ -349,58 +349,94 @@ else:
 # SECCIÓN: FUNNEL DE STARTUPS Y OBJETIVOS
 # ==============================================================================
 
-    st.title("📊 Funnel de Startups por Reference con Objetivos")
-    st.markdown("Las referencias se han agrupado en función de los objetivos definidos:<br> - Marketing: Mail from Decelera Team, Social media, Press, Google, Decelera Newsletter<br> - Referral: Referral<br> - Outreach: Event, Contacted via LinkedIn", unsafe_allow_html=True)
-    OBJ_CAT = {"Marketing": {"Initial screening": 660, "Deep dive": 40, "Pre-committee": 2}, "Referral": {"Initial screening": 150, "Deep dive": 50, "Pre-committee": 5}, "Outreach": {"Initial screening": 325, "Deep dive": 50, "Pre-committee": 5}, "Otros": {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0}}
-    ORDEN_ESTADOS, colores_fun = ["Initial screening", "Deep dive", "Pre-committee"], {"Marketing": "#1FD0EF", "Referral": "#FFB950", "Outreach": "#FAF3DC"}
+st.title("📊 Funnel de Startups por Reference con Objetivos")
+st.markdown("Las referencias se han agrupado en función de los objetivos definidos:<br> - Marketing: Mail from Decelera Team, Social media, Press, Google, Decelera Newsletter<br> - Referral: Referral<br> - Outreach: Event, Contacted via LinkedIn", unsafe_allow_html=True)
 
-    funnel_list = []
-    for cat in [c for c in df["categoria_reference"].unique() if pd.notna(c) and c != "Otros"]:
-        df_cat = df[df["categoria_reference"] == cat]
-        mask_pre = ((df_cat["status"] == "Pre-committee") | (df_cat["reason"].isin(["Pre-comitee", "Pre-committee"])))
-        val_pre = len(df_cat[mask_pre])
-        mask_in_play = ((df_cat["status"] == "Deep dive") | (df_cat["reason"] == "Signals (In play)")); val_in_play = len(df_cat[mask_in_play]) + val_pre
-        mask_qual = ((df_cat["status"] == "Initial screening") | (df_cat["reason"] == "Signals (Qualified)")); val_qual = len(df_cat[mask_qual]) + val_in_play
-        pct_in_play, pct_pre = (val_in_play/val_qual*100 if val_qual>0 else 0), (val_pre/val_in_play*100 if val_in_play>0 else 0)
-        obj_dict = OBJ_CAT.get(cat, {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0})
-        funnel_list.append({"Fuente": cat, "Etapa": "Initial screening", "Actual": val_qual, "Objetivo": obj_dict["Initial screening"], "Pct": 100})
-        funnel_list.append({"Fuente": cat, "Etapa": "Deep dive", "Actual": val_in_play, "Objetivo": obj_dict["Deep dive"], "Pct": pct_in_play})
-        funnel_list.append({"Fuente": cat, "Etapa": "Pre-committee", "Actual": val_pre, "Objetivo": obj_dict["Pre-committee"], "Pct": pct_pre})
+OBJ_CAT = {
+    "Marketing": {"Initial screening": 660, "Deep dive": 40, "Pre-committee": 2}, 
+    "Referral": {"Initial screening": 150, "Deep dive": 50, "Pre-committee": 5}, 
+    "Outreach": {"Initial screening": 325, "Deep dive": 50, "Pre-committee": 5}, 
+    "Otros": {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0}
+}
+ORDEN_ESTADOS, colores_fun = ["Initial screening", "Deep dive", "Pre-committee"], {"Marketing": "#1FD0EF", "Referral": "#FFB950", "Outreach": "#FAF3DC"}
+
+# --- LÓGICA DE DATOS DEL FUNNEL ---
+funnel_list = []
+# Obtenemos categorías únicas presentes en el DF
+cats_presentes = [c for c in df["categoria_reference"].unique() if pd.notna(c) and c != "Otros"]
+
+for cat in cats_presentes:
+    df_cat = df[df["categoria_reference"] == cat]
+    mask_pre = ((df_cat["status"] == "Pre-committee") | (df_cat["reason"].isin(["Pre-comitee", "Pre-committee"])))
+    val_pre = len(df_cat[mask_pre])
+    mask_in_play = ((df_cat["status"] == "Deep dive") | (df_cat["reason"] == "Signals (In play)")); val_in_play = len(df_cat[mask_in_play]) + val_pre
+    mask_qual = ((df_cat["status"] == "Initial screening") | (df_cat["reason"] == "Signals (Qualified)")); val_qual = len(df_cat[mask_qual]) + val_in_play
     
-    df_final_funnel = pd.DataFrame(funnel_list)
-    cols_funnel = st.columns(3)
-    for col, etapa in zip(cols_funnel, ORDEN_ESTADOS):
-        with col:
-            df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa].reset_index(drop=True)
-            labels = [f"{val}" if etapa=="Initial screening" else f"{val}<br><span style='font-size:15px;'>({pct:.1f}%)</span>" for val, pct in zip(df_etapa["Actual"], df_etapa["Pct"])]
-            fig_ind = go.Figure()
-            fig_ind.add_trace(go.Bar(x=df_etapa["Fuente"], y=df_etapa["Actual"], marker_color=[colores_fun.get(f, "#bdc3c7") for f in df_etapa["Fuente"]], text=labels, textposition='outside', cliponaxis=False, name="Actual", textfont=dict(color='black')))
-            fig_ind.add_trace(go.Scatter(x=df_etapa["Fuente"], y=df_etapa["Objetivo"], mode='markers', marker=dict(symbol="line-ew", size=40, line=dict(width=2, color="#555555")), hoverinfo="text", text=[f"Meta: {obj}" for obj in df_etapa["Objetivo"]]))
-            fig_ind.update_layout(title=f"<b>{etapa}</b>", showlegend=False, height=400, margin=dict(l=20, r=20, t=50, b=40), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', xaxis=dict(tickfont=dict(color='black'), linecolor='#d0d0d0'), yaxis=dict(tickfont=dict(color='black'), gridcolor='#f0f0f0'))
-            st.plotly_chart(fig_ind, use_container_width=True)
+    pct_in_play, pct_pre = (val_in_play/val_qual*100 if val_qual>0 else 0), (val_pre/val_in_play*100 if val_in_play>0 else 0)
+    obj_dict = OBJ_CAT.get(cat, {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0})
+    
+    funnel_list.append({"Fuente": cat, "Etapa": "Initial screening", "Actual": val_qual, "Objetivo": obj_dict["Initial screening"], "Pct": 100})
+    funnel_list.append({"Fuente": cat, "Etapa": "Deep dive", "Actual": val_in_play, "Objetivo": obj_dict["Deep dive"], "Pct": pct_in_play})
+    funnel_list.append({"Fuente": cat, "Etapa": "Pre-committee", "Actual": val_pre, "Objetivo": obj_dict["Pre-committee"], "Pct": pct_pre})
+
+df_final_funnel = pd.DataFrame(funnel_list)
+totales_col = {etapa: df_final_funnel[df_final_funnel["Etapa"] == etapa]["Actual"].sum() for etapa in ORDEN_ESTADOS}
+
+# --- DIBUJAR COLUMNAS DEL FUNNEL ---
+cols_funnel = st.columns(3)
+for i, etapa in enumerate(ORDEN_ESTADOS):
+    with cols_funnel[i]:
+        df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa].reset_index(drop=True)
+        t_actual = totales_col[etapa]
+        
+        if i == 0:
+            texto_titulo = f"<b>{etapa}</b><br><span style='font-size:14px;'>Total: {t_actual}</span>"
+        else:
+            t_previo = totales_col[ORDEN_ESTADOS[i-1]]
+            conv = (t_actual / t_previo * 100) if t_previo > 0 else 0
+            texto_titulo = f"<b>{etapa}</b><br><span style='font-size:14px;'>Total: {t_actual} ({conv:.1f}% vs ant.)</span>"
+
+        labels = [f"{val}" if etapa=="Initial screening" else f"{val}<br><span style='font-size:15px;'>({pct:.1f}%)</span>" for val, pct in zip(df_etapa["Actual"], df_etapa["Pct"])]
+        
+        fig_ind = go.Figure()
+        fig_ind.add_trace(go.Bar(x=df_etapa["Fuente"], y=df_etapa["Actual"], marker_color=[colores_fun.get(f, "#bdc3c7") for f in df_etapa["Fuente"]], text=labels, textposition='outside', cliponaxis=False))
+        fig_ind.add_trace(go.Scatter(x=df_etapa["Fuente"], y=df_etapa["Objetivo"], mode='markers', marker=dict(symbol="line-ew", size=40, line=dict(width=2, color="#555555"))))
+        
+        fig_ind.update_layout(title=texto_titulo, showlegend=False, height=400, margin=dict(l=20, r=20, t=85, b=40), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+        
+        # KEY dinámica para evitar problemas de caché
+        st.plotly_chart(fig_ind, use_container_width=True, key=f"funnel_vfinal_{i}_{t_actual}")
 
 # ==============================================================================
-# SECCIÓN: DESGLOSE DE NOT QUALIFIED
+# SECCIÓN: DESGLOSE DE NOT QUALIFIED (CON KEYS CORREGIDAS)
 # ==============================================================================
 
-    st.title("🚫 Desglose de los 'Not Qualified'")
-    cols_nq = st.columns(2)
-    df_not_qual = df[df['status'].str.contains("Not qualified", case=False, na=False) | df["status"].str.contains("Killed", case=False, na=False)].copy()
-    total_nq = len(df_not_qual)
+st.title("🚫 Desglose de los 'Not Qualified'")
+cols_nq = st.columns(2)
+df_not_qual = df[df['status'].str.contains("Not qualified", case=False, na=False) | df["status"].str.contains("Killed", case=False, na=False)].copy()
+total_nq = len(df_not_qual)
 
-    if total_nq > 0:
-        # Red Flags de Tesis
-        all_rf = []
-        for entry in df_not_qual['red_flags_form_7'].dropna(): all_rf.extend(list(set([r.strip() for r in str(entry).split('\n') if "🛑" in r])))
-        df_rf = pd.Series(all_rf).value_counts().reset_index(); df_rf.columns = ['Motivo', 'Cantidad']; df_rf['Porcentaje'] = (df_rf['Cantidad'] / total_nq) * 100
-        fig_rf = px.bar(df_rf, x='Motivo', y='Cantidad', title='🚫 % Red Flags de Tesis', color='Cantidad', color_continuous_scale='Reds', custom_data=[df_rf['Porcentaje']])
-        fig_rf.update_traces(texttemplate='%{y}<br>(%{customdata[0]:.1f}%)', textposition='outside', textfont=dict(color='black', size=12), cliponaxis=False)
-        fig_rf.update_layout(yaxis=dict(range=[0, df_rf['Cantidad'].max() * 1.2]), xaxis=dict(tickangle=45, automargin=True), margin=dict(t=80, b=120), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
-        with cols_nq[1]: st.plotly_chart(fig_rf, use_container_width=True)
+if total_nq > 0:
+    # 1. Motivos (Reason)
+    df_rs = df_not_qual.groupby("reason").size().reset_index(name="conteo")
+    df_rs["porcentaje"] = (df_rs["conteo"] / total_nq) * 100
+    fig_rs = px.bar(df_rs, x="reason", y="conteo", title="Motivos de 'Not Qualified'", color="conteo", color_continuous_scale="Reds", custom_data=[df_rs["porcentaje"]])
+    fig_rs.update_traces(texttemplate='%{y}<br>(%{customdata[0]:.1f}%)', textposition='outside')
+    fig_rs.update_layout(margin=dict(t=80, b=120), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
+    
+    with cols_nq[0]: 
+        st.plotly_chart(fig_rs, use_container_width=True, key=f"nq_reason_chart_{total_nq}")
 
-        # Motivos Not Qualified (Reason)
-        df_rs = df_not_qual.groupby("reason").size().reset_index(name="conteo"); df_rs["porcentaje"] = (df_rs["conteo"] / total_nq) * 100
-        fig_rs = px.bar(df_rs, x="reason", y="conteo", title="Motivos de 'Not Qualified'", color="conteo", color_continuous_scale="Reds", custom_data=[df_rs["porcentaje"]])
-        fig_rs.update_traces(texttemplate='%{y}<br>(%{customdata[0]:.1f}%)', textposition='outside', textfont=dict(color='black', size=12), cliponaxis=False)
-        fig_rs.update_layout(yaxis=dict(range=[0, df_rs['conteo'].max() * 1.2]), xaxis=dict(tickangle=45, automargin=True), margin=dict(t=80, b=120), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
-        with cols_nq[0]: st.plotly_chart(fig_rs, use_container_width=True)
+    # 2. Red Flags
+    all_rf = []
+    for entry in df_not_qual['red_flags_form_7'].dropna(): 
+        all_rf.extend(list(set([r.strip() for r in str(entry).split('\n') if "🛑" in r])))
+    
+    if all_rf:
+        df_rf = pd.Series(all_rf).value_counts().reset_index()
+        df_rf.columns = ['Motivo', 'Cantidad']
+        fig_rf = px.bar(df_rf, x='Motivo', y='Cantidad', title='🚫 % Red Flags de Tesis', color='Cantidad', color_continuous_scale='Reds')
+        fig_rf.update_layout(margin=dict(t=80, b=120), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
+        
+        with cols_nq[1]: 
+            st.plotly_chart(fig_rf, use_container_width=True, key=f"nq_rf_chart_{len(all_rf)}")
