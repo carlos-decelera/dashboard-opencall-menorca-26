@@ -1,0 +1,21 @@
+# Streamlit secrets (¡MUY IMPORTANTE!)
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# Entornos virtuales (Para no subir gigas de librerías)
+venv/
+.venv/
+env/
+
+# Archivos temporales de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Variables de entorno locales
+.env
+.flaskenv
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db

@@ -199,11 +199,13 @@ with st.spinner("Sincronizando con Attio..."):
     df = get_combined_dataframe()
 
 # KPIs rápidos
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Total Deals", len(df))
 col2.metric("Not Qualified", f"{len(df[df["status"] == "Not qualified"])} ({round(len(df[df["status"] == "Not qualified"])/len(df)*100, 2)} %)")
-col3.metric("Qualified", f"{len(df[df["status"] == "Qualified"])} ({round(len(df[df["status"]=="Qualified"])/len(df)*100, 2)} %)")
-col4.metric("In Play", f"{len(df[df["status"]=="In play"])} ({round(len(df[df["status"]=="In play"])/len(df)*100, 2)} %)")
+col3.metric("Initial screeningn", f"{len(df[df["status"] == "Initial screening"])} ({round(len(df[df["status"]=="Initial screening"])/len(df)*100, 2)} %)")
+col4.metric("First interaction", f"{len(df[df["status"]=="First interaction"])} ({round(len(df[df["status"]=="First interaction"])/len(df)*100, 2)} %)")
+col5.metric("Deep dive", f"{len(df[df["status"]=="Deep dive"])} ({round(len(df[df["status"]=="Deep dive"])/len(df)*100, 2)} %)")
+
 
 col_filtro1, col_filtro2, col_filtro3, col_espacio = st.columns([0.2, 0.2, 0.2, 0.4])
 
@@ -734,13 +736,13 @@ else:
 
         # --- CONFIGURACIÓN ---
         OBJETIVOS_POR_CATEGORIA = {
-            "Marketing": {"Qualified": 660, "In Play": 40, "Pre-committee": 2},
-            "Referral": {"Qualified": 150, "In Play": 50, "Pre-committee": 5},
-            "Outreach": {"Qualified": 325, "In Play": 50, "Pre-committee": 5},
-            "Otros": {"Qualified": 0, "In Play": 0, "Pre-committee": 0}
+            "Marketing": {"Initial screening": 660, "Deep dive": 40, "Pre-committee": 2},
+            "Referral": {"Initial screening": 150, "Deep dive": 50, "Pre-committee": 5},
+            "Outreach": {"Initial screening": 325, "Deep dive": 50, "Pre-committee": 5},
+            "Otros": {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0}
         }
 
-        ORDEN_ESTADOS = ["Qualified", "In Play", "Pre-committee"]
+        ORDEN_ESTADOS = ["Initial screening", "Deep dive", "Pre-committee"]
         colores = {"Marketing": "#1FD0EF", "Referral": "#FFB950", "Outreach": "#FAF3DC"}
 
         # --- PROCESAMIENTO DE DATOS (CORREGIDO) ---
@@ -763,9 +765,9 @@ else:
             )
             val_pre = len(df_cat[mask_pre])
 
-            # --- Conteo de In play (Acumulado) ---
+            # --- Conteo de Deep dive (Acumulado) ---
             mask_in_play = (
-                (df_cat["status"] == "In play") | 
+                (df_cat["status"] == "Deep dive") | 
                 (df_cat["reason"] == "Signals (In play)")
             )
             val_in_play = len(df_cat[mask_in_play]) + val_pre
@@ -773,7 +775,7 @@ else:
             # --- Conteo de Qualified (Acumulado) ---
             # Nota: Aquí sumamos los que están en Qualified puro + los acumulados
             mask_qual = (
-                (df_cat["status"] == "Qualified") | 
+                (df_cat["status"] == "Initial screening") | 
                 (df_cat["reason"] == "Signals (Qualified)"))
             val_qual = len(df_cat[mask_qual]) + val_in_play
 
@@ -781,11 +783,11 @@ else:
             pct_pre = round(val_pre / val_in_play * 100, 2) if val_in_play > 0 else 0
 
             # Obtenemos los objetivos
-            obj_dict = OBJETIVOS_POR_CATEGORIA.get(cat, {"Qualified": 0, "In Play": 0, "Pre-committee": 0})
+            obj_dict = OBJETIVOS_POR_CATEGORIA.get(cat, {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0})
 
             # Guardamos cada etapa en la lista para el gráfico
-            funnel_list.append({"Fuente": cat, "Etapa": "Qualified", "Actual": val_qual, "Objetivo": obj_dict.get("Qualified", 0), "Pct": 100})
-            funnel_list.append({"Fuente": cat, "Etapa": "In Play", "Actual": val_in_play, "Objetivo": obj_dict.get("In Play", 0), "Pct": pct_in_play})
+            funnel_list.append({"Fuente": cat, "Etapa": "Initial screening", "Actual": val_qual, "Objetivo": obj_dict.get("Initial screening", 0), "Pct": 100})
+            funnel_list.append({"Fuente": cat, "Etapa": "Deep dive", "Actual": val_in_play, "Objetivo": obj_dict.get("Deep dive", 0), "Pct": pct_in_play})
             funnel_list.append({"Fuente": cat, "Etapa": "Pre-committee", "Actual": val_pre, "Objetivo": obj_dict.get("Pre-committee", 0), "Pct": pct_pre})
 
         df_final_funnel = pd.DataFrame(funnel_list)
@@ -799,7 +801,7 @@ else:
                 df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa].reset_index(drop=True)
 
                 #creamos etiquetas personalizadas
-                if etapa == "Qualified":
+                if etapa == "Initial screening":
                     labels = [f"{val}" for val in df_etapa["Actual"]]
                 else:
                     labels = [f"{val}<br><span style='font-size:15px;'>({pct:.1f}%)</span>"
