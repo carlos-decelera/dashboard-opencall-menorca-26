@@ -385,7 +385,7 @@ else:
 
     st.title("🚫 Desglose de los 'Not Qualified'")
     cols_nq = st.columns(2)
-    df_not_qual = df[df['status'].str.contains("Not qualified", case=False, na=False)].copy()
+    df_not_qual = df[df['status'].str.contains("Not qualified", case=False, na=False) | df["status"].str.contains("Killed", case=False, na=False)].copy()
     total_nq = len(df_not_qual)
 
     if total_nq > 0:
