@@ -8,13 +8,15 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
 
-# --- CONFIGURACIÓN DE PÁGINA ---
+# ==============================================================================
+# CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS
+# ==============================================================================
+
 st.set_page_config(page_title="Attio Deal Dashboard", layout="wide")
 
-# CSS para los contenedores
 st.markdown("""
     <style>
-    /* Buscamos el contenedor nativo de Streamlit y le damos tu estilo */
+    /* Contenedores nativos de Streamlit con estilo de tarjeta */
     [data-testid="stVerticalBlock"] > div:has(div.stPlotlyChart) {
         background-color: #ffffff;
         padding: 20px;
@@ -23,17 +25,22 @@ st.markdown("""
         border: 1px solid #efefef;
         margin-bottom: 20px;
     }
-    /* Ponemos el fondo de la web gris claro para que resalten las tarjetas */
-    .stApp {
-        background-color: #f8f9fa;
-    }
+    /* Fondos de la aplicación */
+    .stApp { background-color: #f8f9fa; }
+    [data-testid="stAppViewContainer"] { background-color: #f9f9fb; }
+    
+    /* Estilos del Header */
+    .outer-container { display: flex; justify-content: center; width: 100%; }
+    .container { display: flex; align-items: center; }
+    .logo-img { width: 80px; height: 80px; margin-right: 20px; }
+    .title-text { font-size: 2.5em; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
-#fondo
-st.markdown('<style>[data-testid="stAppViewContainer"]{background-color: #f9f9fb;}</style>', unsafe_allow_html=True)
+# ==============================================================================
+# CONSTANTES Y CONFIGURACIÓN DE API
+# ==============================================================================
 
-# --- CONSTANTES ---
 ATTIO_API_KEY = st.secrets["ATTIO_API_KEY"]
 DEALS_ID = "dbcd94bf-ec33-4f00-a7c8-74f57a559869"
 DEAL_FLOW_ID = "54265eb6-d53d-465d-ad35-4e823e135629"
@@ -43,154 +50,101 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-# --- FUNCIONES DE EXTRACCIÓN (Tus funciones optimizadas) ---
+# ==============================================================================
+# FUNCIONES DE EXTRACCIÓN Y TRANSFORMACIÓN (LÓGICA CORE)
+# ==============================================================================
+
 def extract_value(attr_list):
     """Extrae el dato real de los valores de atributo de Attio."""
-    if not attr_list:
-        return None
-
+    if not attr_list: return None
     extracted = []
     for item in attr_list:
         attr_type = item.get("attribute_type", "")
         val = None
-
-        if attr_type == "status":
-            val = item.get("status", {}).get("title")
-        elif attr_type == "select":
-            val = item.get("option", {}).get("title")
-        elif attr_type == "domain":
-            val = item.get("domain")
+        if attr_type == "status": val = item.get("status", {}).get("title")
+        elif attr_type == "select": val = item.get("option", {}).get("title")
+        elif attr_type == "domain": val = item.get("domain")
         elif attr_type == "location":
             val = ", ".join(filter(None, [
                 item.get("line_1"), item.get("locality"),
                 item.get("region"), item.get("postcode"),
                 item.get("country_code"),
             ]))
-        elif attr_type == "personal-name":
-            val = item.get("full_name")
-        elif attr_type == "email-address":
-            val = item.get("email_address")
-        elif attr_type == "phone-number":
-            val = item.get("phone_number")
-        elif attr_type == "record-reference":
-            val = item.get("target_record_id")
-        elif attr_type == "actor-reference":
-            val = item.get("referenced_actor_id")
-        elif attr_type == "interaction":
-            val = item.get("interacted_at")
-        elif attr_type == "currency":
-            val = item.get("currency_value")
+        elif attr_type == "personal-name": val = item.get("full_name")
+        elif attr_type == "email-address": val = item.get("email_address")
+        elif attr_type == "phone-number": val = item.get("phone_number")
+        elif attr_type == "record-reference": val = item.get("target_record_id")
+        elif attr_type == "actor-reference": val = item.get("referenced_actor_id")
+        elif attr_type == "interaction": val = item.get("interacted_at")
+        elif attr_type == "currency": val = item.get("currency_value")
         elif attr_type in ("text", "number", "date", "timestamp", "checkbox", "rating"):
             val = item.get("value")
-        else:
-            val = item.get("value")
-
-        if val is not None:
-            extracted.append(str(val))
-
+        else: val = item.get("value")
+        if val is not None: extracted.append(str(val))
     return extracted[0] if len(extracted) == 1 else extracted or None
 
 async def fetch_data(client, url, payload=None):
-    """Función genérica para manejar la paginación de forma eficiente."""
+    """Maneja la paginación de la API de Attio."""
     all_data = []
-    limit = 100 # Aumentamos a 100 para menos saltos de red
-    offset = 0
-    
+    limit, offset = 100, 0
     while True:
         current_payload = payload.copy() if payload else {}
         current_payload.update({"limit": limit, "offset": offset})
-        
         response = await client.post(url, headers=HEADERS, json=current_payload)
         response.raise_for_status()
         data = response.json().get("data", [])
         all_data.extend(data)
-        
-        if len(data) < limit:
-            break
+        if len(data) < limit: break
         offset += limit
     return all_data
 
 def transform_attio_to_df(attio_data):
+    """Convierte la respuesta JSON de Attio en un DataFrame de Pandas."""
     rows = []
     for record in attio_data:
-        record_id = (
-            record.get("id", {}).get("record_id") or 
-            record.get("parent_record_id")
-        )
-        row = {
-            "record_id": record_id,
-            "created_at": record.get("created_at")
-        }
+        record_id = record.get("id", {}).get("record_id") or record.get("parent_record_id")
+        row = {"record_id": record_id, "created_at": record.get("created_at")}
         values_source = record.get("entry_values", {}) or record.get("values", {})
         for attr_name, attr_list in values_source.items():
             row[attr_name] = extract_value(attr_list)
         rows.append(row)
     return pd.DataFrame(rows)
 
-# --- NÚCLEO DEL DASHBOARD (Caché y Paralelismo) ---
-@st.cache_data(ttl=600) # El dashboard será instantáneo durante 10 min
+# ==============================================================================
+# GESTIÓN DE DATOS ASÍNCRONA Y CACHÉ
+# ==============================================================================
+
+@st.cache_data(ttl=600)
 def get_combined_dataframe():
     async def run_parallel_fetches():
         async with httpx.AsyncClient() as client:
-            # Lanzamos ambas peticiones al mismo tiempo
             records_task = fetch_data(client, f"{BASE_URL}/objects/{DEALS_ID}/records/query", 
-                                    payload={
-                                        "$or": [
-                                            {"stage": "Menorca 2026"},
-                                            {"stage": "Leads Menorca 2026"}
-                                        ]
-                                    })
+                                    payload={"$or": [{"stage": "Menorca 2026"}, {"stage": "Leads Menorca 2026"}]})
             entries_task = fetch_data(client, f"{BASE_URL}/lists/{DEAL_FLOW_ID}/entries/query")
-            
             return await asyncio.gather(records_task, entries_task)
 
-    # Ejecutar el loop asíncrono
     raw_records, raw_entries = asyncio.run(run_parallel_fetches())
-    
     df_rec = transform_attio_to_df(raw_records)
     df_ent = transform_attio_to_df(raw_entries)
     
-    # Merge final
-    if df_rec.empty or df_ent.empty:
-        return pd.DataFrame()
-        
+    if df_rec.empty or df_ent.empty: return pd.DataFrame()
     return pd.merge(df_rec, df_ent, on="record_id")
 
-col_title, col_btn = st.columns([0.85, 0.15])
+# ==============================================================================
+# HEADER Y CONTROLES DE INTERFAZ
+# ==============================================================================
 
+col_title, col_btn = st.columns([0.85, 0.15])
 with col_btn:
     if st.button("🔄 Refrescar"):
         get_combined_dataframe.clear()
         st.rerun()
 
-# --- INTERFAZ STREAMLIT ---
 st.markdown("""
-<style>
-.outer-container {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-}
-.container {
-    display: flex;
-    align-items: center;
-}
-.logo-img {
-    width: 80px;
-    height: 80px;
-    margin-right: 20px;
-}
-.title-text {
-    font-size: 2.5em;
-    font-weight: bold;
-}
-</style>
-<div class="outer-container">
-<div class="container">
+<div class="outer-container"><div class="container">
     <img class="logo-img" src="https://images.squarespace-cdn.com/content/v1/67811e8fe702fd5553c65249/c5500619-9712-4b9b-83ee-a697212735ae/Disen%CC%83o+sin+ti%CC%81tulo+%2840%29.png">
     <h1 class="title-text">Deal Flow - Funnel<br>Menorca 2026</h1>
-</div>
-</div>
+</div></div>
 """, unsafe_allow_html=True)
 
 st.markdown("")
@@ -198,51 +152,48 @@ st.markdown("")
 with st.spinner("Sincronizando con Attio..."):
     df = get_combined_dataframe()
 
+# ==============================================================================
+# SECCIÓN: KPIs Y FILTROS TEMPORALES
+# ==============================================================================
+
 # KPIs rápidos
 col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Total Deals", len(df))
-col2.metric("Not Qualified", f"{len(df[df["status"] == "Not qualified"])} ({round(len(df[df["status"] == "Not qualified"])/len(df)*100, 2)} %)")
-col3.metric("Initial screeningn", f"{len(df[df["status"] == "Initial screening"])} ({round(len(df[df["status"]=="Initial screening"])/len(df)*100, 2)} %)")
-col4.metric("First interaction", f"{len(df[df["status"]=="First interaction"])} ({round(len(df[df["status"]=="First interaction"])/len(df)*100, 2)} %)")
-col5.metric("Deep dive", f"{len(df[df["status"]=="Deep dive"])} ({round(len(df[df["status"]=="Deep dive"])/len(df)*100, 2)} %)")
+col2.metric("Not Qualified", f"{len(df[df['status'] == 'Not qualified'])} ({round(len(df[df['status'] == 'Not qualified'])/len(df)*100, 2)} %)")
+col3.metric("Initial screening", f"{len(df[df['status'] == 'Initial screening'])} ({round(len(df[df['status']=='Initial screening'])/len(df)*100, 2)} %)")
+col4.metric("First interaction", f"{len(df[df['status']=='First interaction'])} ({round(len(df[df['status']=='First interaction'])/len(df)*100, 2)} %)")
+col5.metric("Deep dive", f"{len(df[df['status']=='Deep dive'])} ({round(len(df[df['status']=='Deep dive'])/len(df)*100, 2)} %)")
 
-
+# Filtros de periodo
 col_filtro1, col_filtro2, col_filtro3, col_espacio = st.columns([0.2, 0.2, 0.2, 0.4])
-
-if "periodo" not in st.session_state:
-    st.session_state.periodo = "Todo"
+if "periodo" not in st.session_state: st.session_state.periodo = "Todo"
 
 with col_filtro1:
     if st.button("🌐 Visión Global", use_container_width=True):
-        st.session_state.periodo = "Todo"
-        st.rerun()
-
+        st.session_state.periodo = "Todo"; st.rerun()
 with col_filtro2:
     if st.button("📅 Visión Semanal", use_container_width=True):
-        st.session_state.periodo="Semana"
-        st.rerun()
-
+        st.session_state.periodo = "Semana"; st.rerun()
 with col_filtro3:
     if st.button("📅 Semana Anterior", use_container_width=True):
-        st.session_state.periodo = "Semana Anterior"
-        st.rerun()
+        st.session_state.periodo = "Semana Anterior"; st.rerun()
 
-# Logica de filtrado
+# Lógica de filtrado temporal
 if st.session_state.periodo == "Semana":
     df["created_at_y_dt"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None)
-
-    # Calculamos el lunes de la semana actual
     hoy = pd.Timestamp.now()
     lunes_actual = (hoy - pd.Timedelta(days=hoy.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-
     df = df[df["created_at_y_dt"] >= lunes_actual].copy()
-    
 elif st.session_state.periodo == "Semana Anterior":
     df["created_at_y_dt"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None)
     hoy = pd.Timestamp.now()
     lunes_actual = (hoy - pd.Timedelta(days=hoy.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     lunes_anterior = lunes_actual - pd.Timedelta(weeks=1)
     df = df[(df["created_at_y_dt"] >= lunes_anterior) & (df["created_at_y_dt"] < lunes_actual)].copy()
+
+# ==============================================================================
+# SECCIÓN: MÉTRICAS GENERALES POR OWNER
+# ==============================================================================
 
 if df.empty:
     st.warning("No se encontraron datos para los filtros aplicados.")
@@ -256,684 +207,200 @@ else:
     }
     st.title("General Metrics")
 
-    # Pasamos todo a string formato YYYY-MM-DD para que no haya margen de error
     df["fecha_iso"] = pd.to_datetime(df["created_at_y"], errors='coerce').dt.strftime('%Y-%m-%d')
     target = "2026-02-16"
+    df_filtrado = df[df["fecha_iso"] != target].copy() if st.session_state.periodo == "Semana" else df.copy()
 
-    if st.session_state.periodo == "Semana":
-        df_filtrado = df[df["fecha_iso"] != target].copy()
-    else:
-        df_filtrado = df.copy()
-
-    counts = df_filtrado[df["status"] != "Not qualified"]["owner"].astype(str).value_counts()
-
+    counts = df_filtrado[df_filtrado["status"] != "Not qualified"]["owner"].astype(str).value_counts()
     cols = st.columns(len(member_map))
     for i, (user_id, name) in enumerate(member_map.items()):
         with cols[i]:
             total = counts.get(str(user_id), 0)
             st.metric(label=name, value=int(total))
 
-    if not df["created_at_y"].empty and "created_at_y" in df.columns and not df["reference_3"].empty and "reference_3" in df.columns:
-        cols = st.columns(2)
+# ==============================================================================
+# SECCIÓN: EVOLUCIÓN TEMPORAL Y DISTRIBUCIÓN POR FUENTE
+# ==============================================================================
 
-        # Vamos a poner por cada fuente
-        status_map = {
-            "Leads Menorca 2026": "Deal Flow",
-            "Menorca 2026": "Open Call"
-        }
-
+    if not df["created_at_y"].empty and "reference_3" in df.columns:
+        status_map = {"Leads Menorca 2026": "Deal Flow", "Menorca 2026": "Open Call"}
         mapeo_reference = {
-            "Mail from Decelera Team": "Marketing",
-            "Social media (LinkedIn, X, Instagram...)": "Marketing",
-            "Press": "Marketing",
-            "Google": "Marketing",
-            "Decelera Newsletter": "Marketing",
-            "Referral": "Referral",
-            "Investor": "Referral",
-            "Portfolio": "Referral",
-            "Alumni": "Referral",
-            "EM": "Referral",
-            "Event": "Outreach",
-            "Contacted by LinkedIn": "Outreach",
-            "Outbound": "Outreach",
-            "Inbound": "Marketing",
-            "Decelera Team": "Outreach",
-            "Other": "Otros"
+            "Mail from Decelera Team": "Marketing", "Social media (LinkedIn, X, Instagram...)": "Marketing",
+            "Press": "Marketing", "Google": "Marketing", "Decelera Newsletter": "Marketing",
+            "Referral": "Referral", "Investor": "Referral", "Portfolio": "Referral", "Alumni": "Referral", "EM": "Referral",
+            "Event": "Outreach", "Contacted by LinkedIn": "Outreach", "Outbound": "Outreach",
+            "Inbound": "Marketing", "Decelera Team": "Outreach", "Other": "Otros"
         }
 
         df["categoria_reference"] = df["reference_3"].map(mapeo_reference).fillna("No Especificado")
+        df["stage_limpio"] = df["stage"].astype(str).str.strip()
+        df["stage_bonito"] = df["stage_limpio"].map(status_map)
+        df["fecha"] = pd.to_datetime(df["created_at_y"], errors="coerce").dt.date
 
-        # VAMOS A HACER UNA GRAFICA DE APLICACIONES POR DIA ==========================
-        # --- 1. PREPARACIÓN DE DATOS BASE ---
-        df_apps_base = df.copy()
-        # Limpiamos espacios y aplicamos el mapa
-        df_apps_base["stage_limpio"] = df_apps_base["stage"].astype(str).str.strip()
-        df_apps_base["stage_bonito"] = df_apps_base["stage_limpio"].map(status_map)
-        df_apps_base["fecha"] = pd.to_datetime(df_apps_base["created_at_y"], errors="coerce").dt.date
-
-        # --- 2. FUNCIÓN DE TRAZAS CON RESTA SELECTIVA ---
+        # --- GRÁFICA DE EVOLUCIÓN (LINE CHART) ---
         def get_traces_for_status(status=None):
-            if status:
-                df_f = df_apps_base[df_apps_base["stage_bonito"] == status].copy()
-            else:
-                df_f = df_apps_base.copy()
-
-            # Agrupación Total por fecha
+            df_f = df[df["stage_bonito"] == status].copy() if status else df.copy()
             df_total = df_f.groupby("fecha").size().reset_index(name="aplicaciones")
-            
-            # --- LÓGICA DE LA RESTA ESPECÍFICA ---
             fecha_target = pd.to_datetime("2026-02-16").date()
-            
-            # SOLO restamos si:
-            # a) Estamos viendo el total (status is None)
-            # b) Estamos viendo específicamente Leads (status == "Deal Flow")
             if status is None or status == "Deal Flow":
                 mask = df_total["fecha"] == fecha_target
-                if mask.any():
-                    # Restamos 268 solo a este grupo
-                    df_total.loc[mask, "aplicaciones"] = (df_total.loc[mask, "aplicaciones"] - 268).clip(lower=0)
-            
-            df_total = df_total.sort_values("fecha")
-            
-            # Agrupación por Categoría (para las líneas de colores)
+                if mask.any(): df_total.loc[mask, "aplicaciones"] = (df_total.loc[mask, "aplicaciones"] - 268).clip(lower=0)
             df_cat = df_f.groupby(["fecha", "categoria_reference"]).size().reset_index(name="count")
-            
-            # Si quieres que en el desglose por categorías también se note la resta:
             if status is None or status == "Deal Flow":
-                # Restamos de 'Otros' (o la categoría que prefieras) para que cuadre el total
                 mask_cat = (df_cat["fecha"] == fecha_target) & (df_cat["categoria_reference"] == "Otros")
-                if mask_cat.any():
-                    df_cat.loc[mask_cat, "count"] = (df_cat.loc[mask_cat, "count"] - 268).clip(lower=0)
+                if mask_cat.any(): df_cat.loc[mask_cat, "count"] = (df_cat.loc[mask_cat, "count"] - 268).clip(lower=0)
+            return df_total.sort_values("fecha"), df_cat.sort_values("fecha")
 
-            df_cat = df_cat.sort_values("fecha")
-            
-            return df_total, df_cat
-
-        # Datos iniciales (Todos)
         df_total_all, df_cat_all = get_traces_for_status()
+        fig = px.line(df_cat_all, x="fecha", y="count", color="categoria_reference", markers=True, template="plotly_white", color_discrete_sequence=px.colors.qualitative.Safe)
+        fig.add_trace(go.Scatter(x=df_total_all["fecha"], y=df_total_all["aplicaciones"], name="Total", line=dict(color="#1FD0EF", width=4, dash="dot"), mode="lines+markers"))
 
-        # --- 3. CREAR FIGURA INICIAL ---
-        fig = px.line(
-            df_cat_all, x="fecha", y="count", color="categoria_reference",
-            markers=True, template="plotly_white",
-            color_discrete_sequence=px.colors.qualitative.Safe
-        )
-
-        # Añadir línea de Total
-        fig.add_trace(go.Scatter(
-            x=df_total_all["fecha"], y=df_total_all["aplicaciones"],
-            name="Total", line=dict(color="#1FD0EF", width=4, dash="dot"),
-            mode="lines+markers"
-        ))
-
-        # --- 4. CONSTRUCCIÓN DE BOTONES ---
-        total_acumulado = df_total_all["aplicaciones"].sum()
-
-        line_buttons = []
-
-        # Botón "Todos"
-        line_buttons.append(dict(
-            method="update",
-            label="Todos",
-            args=[
-                {
-                    "x": [df_cat_all[df_cat_all["categoria_reference"]==c]["fecha"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["fecha"]],
-                    "y": [df_cat_all[df_cat_all["categoria_reference"]==c]["count"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["aplicaciones"]]
-                },
-                {"title.text": f'📈 Compañías a lo largo del tiempo (Total: {total_acumulado})'}
-            ]
-        ))
-
-        status_list = ["Deal Flow", "Open Call"]
-
-        for status in status_list:
+        line_buttons = [dict(method="update", label="Todos", args=[{"x": [df_cat_all[df_cat_all["categoria_reference"]==c]["fecha"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["fecha"]], "y": [df_cat_all[df_cat_all["categoria_reference"]==c]["count"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["aplicaciones"]]}, {"title.text": f'📈 Compañías a lo largo del tiempo (Total: {df_total_all["aplicaciones"].sum()})'}])]
+        for status in ["Deal Flow", "Open Call"]:
             df_t, df_c = get_traces_for_status(status)
-            total_status = df_t["aplicaciones"].sum()
-            
-            new_x = []
-            new_y = []
+            new_x, new_y = [], []
             for trace in fig.data:
                 if trace.name == "Total":
-                    new_x.append(df_t["fecha"])
-                    new_y.append(df_t["aplicaciones"])
+                    new_x.append(df_t["fecha"]); new_y.append(df_t["aplicaciones"])
                 else:
                     filtered_cat = df_c[df_c["categoria_reference"] == trace.name]
-                    new_x.append(filtered_cat["fecha"])
-                    new_y.append(filtered_cat["count"])
+                    new_x.append(filtered_cat["fecha"]); new_y.append(filtered_cat["count"])
+            line_buttons.append(dict(method="update", label=status, args=[{"x": new_x, "y": new_y}, {"title.text": f'📈 Compañías a lo largo del tiempo (Total: {df_t["aplicaciones"].sum()})'}]))
 
-            line_buttons.append(dict(
-                method="update",
-                label=status,
-                args=[
-                    {"x": new_x, "y": new_y},
-                    {"title.text": f'📈 Compañías a lo largo del tiempo (Total: {total_status})'}
-                ]
-            ))
+        fig.update_layout(updatemenus=[dict(buttons=line_buttons, direction="down", showactive=True, x=1.0, xanchor="right", y=1.2, yanchor="top", bgcolor="white", bordercolor="#bec8d9")], title=f'📈 Compañías a lo largo del tiempo (Total: {df_total_all["aplicaciones"].sum()})', hovermode='x unified', xaxis=dict(type='date', tickformat='%d %b'), yaxis=dict(rangemode="tozero"), margin=dict(t=100), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+        for trace in fig.data: 
+            if trace.name != "Total": trace.visible = "legendonly"
 
-        fig.update_layout(
-            updatemenus=[dict(
-                buttons=line_buttons,
-                direction="down", showactive=True,
-                x=1.0, xanchor="right", y=1.2, yanchor="top",
-                bgcolor="white", bordercolor="#bec8d9"
-            )],
-            title=f'📈 Compañías a lo largo del tiempo (Total: {total_acumulado})',
-            hovermode='x unified',
-            xaxis=dict(type='date', tickformat='%d %b'),
-            yaxis=dict(rangemode="tozero"),
-            margin=dict(t=100),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
-        )
+        cols_row1 = st.columns(2)
+        with cols_row1[0]: st.plotly_chart(fig, use_container_width=True)
 
-        # Ocultar categorías por defecto excepto Total
-        for trace in fig.data:
-            if trace.name != "Total":
-                trace.visible = "legendonly"
-
-        with cols[0]:
-            st.plotly_chart(fig, use_container_width=True)
-
-        # --- PIE CHART DE CATEGORIAS ---
-
-        # 1. Crear la columna con nombres limpios
-        df["stage_bonito"] = df["stage"].map(status_map)
-        # Sacamos la lista de la columna 'stage_bonito'
-        status_list = df["stage_bonito"].dropna().unique().tolist()
-
-        # 2. Datos iniciales (Todos)
+        # --- PIE CHART (REFERENCE) ---
         df_counts_all = df["categoria_reference"].value_counts()
-
-        fig_pie = px.pie(
-            names=df_counts_all.index,
-            values=df_counts_all.values,
-            title='🎯 Distribución por Reference',
-            hole=0.4,
-            color_discrete_sequence=px.colors.qualitative.Safe
-        )
-
-        # --- LÓGICA DE BOTONES INTERNOS ---
-        buttons = []
-
-        # Botón "Todos"
-        buttons.append(dict(
-            method="restyle",
-            label="Todos",
-            args=[{"values": [df_counts_all.values], "labels": [df_counts_all.index]}]
-        ))
-
-        # Botones por Status
-        for status in status_list:
-            # FILTRAMOS por la columna 'stage_bonito' para que coincida con el texto del botón
+        fig_pie = px.pie(names=df_counts_all.index, values=df_counts_all.values, title='🎯 Distribución por Reference', hole=0.4, color_discrete_sequence=px.colors.qualitative.Safe)
+        pie_buttons = [dict(method="restyle", label="Todos", args=[{"values": [df_counts_all.values], "labels": [df_counts_all.index]}])]
+        for status in df["stage_bonito"].dropna().unique().tolist():
             df_temp = df[df["stage_bonito"] == status]["categoria_reference"].value_counts()
-            
-            buttons.append(dict(
-                method="restyle",
-                label=status,
-                args=[{"values": [df_temp.values], "labels": [df_temp.index]}]
-            ))
+            pie_buttons.append(dict(method="restyle", label=status, args=[{"values": [df_temp.values], "labels": [df_temp.index]}]))
 
-        # 3. Configurar Layout y Menú
-        fig_pie.update_layout(
-            updatemenus=[
-                dict(
-                    buttons=buttons,
-                    direction="down",
-                    showactive=True,
-                    x=1.0,      # 0.0 es la izquierda del gráfico
-                    xanchor="left",
-                    y=1.2,      # Un poco más arriba para que no tape el título
-                    yanchor="top",
-                    bgcolor="white",
-                    bordercolor="#bec8d9"
-                )
-            ],
-            margin=dict(t=100, b=50, l=40, r=150) # Aumentamos margen superior (t) para el botón
-        )
+        fig_pie.update_layout(updatemenus=[dict(buttons=pie_buttons, direction="down", showactive=True, x=1.0, xanchor="left", y=1.2, yanchor="top", bgcolor="white", bordercolor="#bec8d9")], margin=dict(t=100, b=50, l=40, r=150), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.1))
+        fig_pie.update_traces(textinfo='percent+value', textposition='auto', marker=dict(line=dict(color="#000000", width=1)), textfont=dict(color="black", size=14))
+        with cols_row1[1]: st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
 
-        # --- Estética ---
-        fig_pie.update_traces(
-            textinfo='percent+value',
-            textposition='auto',
-            marker=dict(line=dict(color="#000000", width=1)),
-            textfont=dict(color="black", size=14)
-        )
+# ==============================================================================
+# SECCIÓN: UBICACIÓN Y SCORING (BARS & DISTPLOT)
+# ==============================================================================
 
-        fig_pie.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            legend=dict(
-                orientation="v",
-                yanchor="middle",
-                y=0.5,
-                xanchor="left",
-                x=1.1
-            )
-        )
-
-        with cols[1]:
-            st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
-
-        # Vamos a hacer unas barras para ver los paises de los que vienen
-        col1, col2 = st.columns(2)
+        col1_loc, col2_gf = st.columns(2)
         campo_const = "constitution_company"
-
         if campo_const in df.columns:
-            df_const = df.copy()
-            df_const[campo_const] = df_const[campo_const].fillna("Sin especificar")
-            df_const["stage_bonito"] = df_const["stage"].map(status_map)
-            
-            # --- FUNCIÓN PARA GENERAR ETIQUETAS CON PORCENTAJE ---
+            df_const = df.copy(); df_const[campo_const] = df_const[campo_const].fillna("Sin especificar")
             def get_labels_with_pct(counts_series):
                 total = counts_series.sum()
-                # Creamos una lista tipo: ["15 (30%)", "10 (20%)", ...]
                 return [f"{v} ({(v/total)*100:.1f}%)" if total > 0 else f"{v}" for v in counts_series]
-
-            # Datos iniciales (Todos)
-            df_all = df_const.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
-            text_all = get_labels_with_pct(df_all["Cantidad"])
-
-            fig_const = px.bar(
-                df_all,
-                x=campo_const,
-                y="Cantidad",
-                title="Constitution location",
-                color="Cantidad",
-                color_continuous_scale="Blues",
-                text=text_all, # Usamos nuestras etiquetas calculadas
-                template="plotly_white"
-            )
-
-            # --- LÓGICA DE BOTONES ---
-            const_buttons = []
-            
-            # Botón "Todos"
-            const_buttons.append(dict(
-                method="restyle",
-                label="Todos",
-                args=[{
-                    "x": [df_all[campo_const].tolist()],
-                    "y": [df_all["Cantidad"].tolist()],
-                    "text": [text_all], # Lista con porcentajes
-                    "marker.color": [df_all["Cantidad"].tolist()]
-                }]
-            ))
-
-            # Botones por Status
-            status_list = df_const["stage_bonito"].dropna().unique().tolist()
-            for status in status_list:
+            df_all_loc = df_const.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
+            text_all_loc = get_labels_with_pct(df_all_loc["Cantidad"])
+            fig_const = px.bar(df_all_loc, x=campo_const, y="Cantidad", title="Constitution location", color="Cantidad", color_continuous_scale="Blues", text=text_all_loc, template="plotly_white")
+            const_buttons = [dict(method="restyle", label="Todos", args=[{"x": [df_all_loc[campo_const].tolist()], "y": [df_all_loc["Cantidad"].tolist()], "text": [text_all_loc], "marker.color": [df_all_loc["Cantidad"].tolist()]}])]
+            for status in df_const["stage_bonito"].dropna().unique().tolist():
                 df_filtered = df_const[df_const["stage_bonito"] == status]
                 df_temp = df_filtered.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
-                
-                # Calculamos porcentajes específicos para este filtro
                 text_temp = get_labels_with_pct(df_temp["Cantidad"])
-                
-                const_buttons.append(dict(
-                    method="restyle",
-                    label=status,
-                    args=[{
-                        "x": [df_temp[campo_const].tolist()],
-                        "y": [df_temp["Cantidad"].tolist()],
-                        "text": [text_temp], # Lista con porcentajes del filtro
-                        "marker.color": [df_temp["Cantidad"].tolist()]
-                    }]
-                ))
+                const_buttons.append(dict(method="restyle", label=status, args=[{"x": [df_temp[campo_const].tolist()], "y": [df_temp["Cantidad"].tolist()], "text": [text_temp], "marker.color": [df_temp["Cantidad"].tolist()]}]))
+            fig_const.update_layout(updatemenus=[dict(buttons=const_buttons, direction="down", showactive=True, x=1.0, xanchor="right", y=1.25, yanchor="top", bgcolor="white", bordercolor="#bec8d9")], margin=dict(t=120, b=50, l=40, r=40), xaxis={'categoryorder':'total descending'}, coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+            fig_const.update_traces(textposition='outside', cliponaxis=False, textfont=dict(size=12, color="black"))
+            with col1_loc: st.plotly_chart(fig_const, use_container_width=True, config={"displayModeBar": False})
 
-            # 3. Layout (Manteniendo posición arriba a la derecha)
-            fig_const.update_layout(
-                updatemenus=[dict(
-                    buttons=const_buttons,
-                    direction="down",
-                    showactive=True,
-                    x=1.0, xanchor="right",
-                    y=1.25, yanchor="top",
-                    bgcolor="white", bordercolor="#bec8d9"
-                )],
-                margin=dict(t=120, b=50, l=40, r=40),
-                xaxis={'categoryorder':'total descending'},
-                coloraxis_showscale=False,
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)'
-            )
-
-            fig_const.update_traces(
-                textposition='outside', 
-                cliponaxis=False,
-                textfont=dict(size=12, color="black") # Ajustamos fuente para que quepa el texto
-            )
-
-            with col1:
-                st.plotly_chart(fig_const, use_container_width=True, config={"displayModeBar": False})
-
-        # --- GRÁFICA DE DISTRIBUCIÓN DE FORM SCORE ---
-        # --- GRÁFICA DE DISTRIBUCIÓN CONTINUA (KDE) ---
-        
-        # --- GRÁFICA DE DISTRIBUCIÓN DE FORM SCORE ---
+        # --- DISTPLOT Y GREEN FLAGS ---
         df_score = df[df["form_score"].notna()].copy()
         df_score["form_score"] = pd.to_numeric(df_score["form_score"], errors="coerce")
         df_score = df_score[df_score["form_score"] > 0]
-
         st.title(f"📈 Form Scoring de las aplicaciones: {len(df_score)} aplicaciones")
-        col1, col2 = st.columns(2)
+        c_score1, c_score2 = st.columns(2)
 
-        # --- VALIDACIÓN CRÍTICA PARA EVITAR EL VALUEERROR ---
-        # Verificamos que haya más de un elemento y que no sean todos iguales
         if len(df_score) <= 1 or df_score["form_score"].nunique() <= 1:
-            with col1:
-                st.warning("No hay suficientes datos variados para generar la curva de distribución (se requieren al menos 2 valores distintos).")
-                # Opcional: Mostrar un histograma simple de Plotly Express en su lugar que no falla
-                if not df_score.empty:
-                    fig_simple = px.histogram(df_score, x="form_score", title="Distribución Simple (Sin curva)")
-                    st.plotly_chart(fig_simple, use_container_width=True)
+            with c_score1: 
+                st.warning("No hay suficientes datos variados.")
+                if not df_score.empty: st.plotly_chart(px.histogram(df_score, x="form_score"), use_container_width=True)
         else:
-            # Si hay datos suficientes, ejecutamos el distplot original
-            hist_data = [df_score["form_score"]]
-            group_labels = ['Form Score']
-            
-            fig_dist = ff.create_distplot(
-                hist_data, group_labels, 
-                show_hist=False, 
-                show_rug=False, 
-                colors=['#1FD0EF']
-            )
-
-            # ... (el resto de tu lógica de add_vline y add_annotation se mantiene igual)
-            total = len(df_score)
-            n_bajo = len(df_score[df_score["form_score"] < 30])
-            n_medio = len(df_score[(df_score["form_score"] >= 30) & (df_score["form_score"] < 65)])
-            n_alto = len(df_score[df_score["form_score"] >= 65])
-
+            fig_dist = ff.create_distplot([df_score["form_score"]], ['Form Score'], show_hist=False, show_rug=False, colors=['#1FD0EF'])
+            total_s = len(df_score)
+            n_bajo, n_medio, n_alto = len(df_score[df_score["form_score"] < 30]), len(df_score[(df_score["form_score"] >= 30) & (df_score["form_score"] < 65)]), len(df_score[df_score["form_score"] >= 65])
             fig_dist.add_vline(x=30, line_dash="dash", line_color="#ef4444", line_width=2)
             fig_dist.add_vline(x=65, line_dash="dash", line_color="#22c55e", line_width=2)
+            for s in [{"x": 15, "n": n_bajo, "lbl": "Bajo"}, {"x": 47, "n": n_medio, "lbl": "Medio"}, {"x": 82, "n": n_alto, "lbl": "Alto"}]:
+                fig_dist.add_annotation(x=s["x"], y=0.85, yref="paper", text=f"<b>{s['lbl']}</b><br>{s['n']} deals<br>{(s['n']/total_s)*100:.1f}%", showarrow=False, font=dict(size=13))
+            fig_dist.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, margin=dict(t=40, b=40, l=20, r=20), xaxis=dict(title="Puntuación", range=[0, 100], dtick=10), yaxis=dict(title="Densidad"))
+            with c_score1: st.plotly_chart(fig_dist, use_container_width=True)
 
-            segmentos = [
-                {"x": 15, "n": n_bajo, "lbl": "Bajo"},
-                {"x": 47, "n": n_medio, "lbl": "Medio"},
-                {"x": 82, "n": n_alto, "lbl": "Alto"}
-            ]
+        # Green Flags
+        campo_green_flags = 'green_flags_form'
+        if campo_green_flags in df.columns:
+            df_green = df[df[campo_green_flags].str.contains("🟢", na=False)].copy()
+            if not df_green.empty:
+                all_green = []
+                for entry in df_green[campo_green_flags]: all_green.extend(list(set([g.strip() for g in str(entry).split('\n') if "🟢" in g])))
+                df_gf_counts = pd.Series(all_green).value_counts().reset_index(); df_gf_counts.columns = ['Green Flag', 'Cantidad']; df_gf_counts['Porcentaje'] = (df_gf_counts['Cantidad'] / len(df_green)) * 100
+                fig_gf = px.bar(df_gf_counts, x='Green Flag', y='Cantidad', title=f'🟢 Green Flags: {len(df_green)} compañías', color='Cantidad', color_continuous_scale='Greens', custom_data=[df_gf_counts['Porcentaje']])
+                fig_gf.update_traces(texttemplate='%{y}<br>(%{customdata[0]:.1f}%)', textposition='outside', textfont=dict(color='black', size=12), cliponaxis=False)
+                fig_gf.update_layout(yaxis=dict(range=[0, df_gf_counts['Cantidad'].max() * 1.3]), xaxis=dict(tickangle=45, automargin=True), margin=dict(t=80, b=120), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
+                with c_score2: st.plotly_chart(fig_gf, use_container_width=True)
 
-            for s in segmentos:
-                pct = (s["n"] / total) * 100
-                fig_dist.add_annotation(
-                    x=s["x"], y=0.85, yref="paper",
-                    text=f"<b>{s['lbl']}</b><br>{s['n']} deals<br>{pct:.1f}%",
-                    showarrow=False, font=dict(size=13)
-                )
+# ==============================================================================
+# SECCIÓN: FUNNEL DE STARTUPS Y OBJETIVOS
+# ==============================================================================
 
-            fig_dist.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                showlegend=False,
-                margin=dict(t=40, b=40, l=20, r=20),
-                xaxis=dict(title="Puntuación", range=[0, 100], dtick=10),
-                yaxis=dict(title="Densidad")
-            )
-            
-            with col1:
-                st.plotly_chart(fig_dist, use_container_width=True)
+    st.title("📊 Funnel de Startups por Reference con Objetivos")
+    st.markdown("Las referencias se han agrupado en función de los objetivos definidos:<br> - Marketing: Mail from Decelera Team, Social media, Press, Google, Decelera Newsletter<br> - Referral: Referral<br> - Outreach: Event, Contacted via LinkedIn", unsafe_allow_html=True)
+    OBJ_CAT = {"Marketing": {"Initial screening": 660, "Deep dive": 40, "Pre-committee": 2}, "Referral": {"Initial screening": 150, "Deep dive": 50, "Pre-committee": 5}, "Outreach": {"Initial screening": 325, "Deep dive": 50, "Pre-committee": 5}, "Otros": {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0}}
+    ORDEN_ESTADOS, colores_fun = ["Initial screening", "Deep dive", "Pre-committee"], {"Marketing": "#1FD0EF", "Referral": "#FFB950", "Outreach": "#FAF3DC"}
 
-            # VAMOS A DARLE A LAS GREEN FLAGS
-
-            # --- SECCIÓN GREEN FLAGS ---            
-            # 1. Filtramos compañías que tengan el campo de green flags (ajusta el nombre del campo)
-            # Asumo que el campo se llama 'green_flags_form_7', cámbialo si es necesario
-            campo_green_flags = 'green_flags_form' 
-            
-            if campo_green_flags in df.columns:
-                df_green = df[df[campo_green_flags].str.contains("🟢", na=False)].copy()
-                total_companias_con_flags = len(df_green)
-                
-                if total_companias_con_flags > 0:
-                    all_green_reasons = []
-                    for entry in df_green[campo_green_flags]:
-                        # Extraemos líneas que contienen el círculo verde, limpiamos y evitamos duplicados por empresa
-                        flags = list(set([g.strip() for g in str(entry).split('\n') if (g.strip() and "🟢" in g)]))
-                        all_green_reasons.extend(flags)
-
-                    # 2. Conteo y preparación de DataFrame
-                    df_gf_counts = pd.Series(all_green_reasons).value_counts().reset_index()
-                    df_gf_counts.columns = ['Green Flag', 'Cantidad']
-                    
-                    # 3. Calcular % sobre el total de compañías que tienen alguna flag
-                    df_gf_counts['Porcentaje'] = (df_gf_counts['Cantidad'] / total_companias_con_flags) * 100
-
-                    # 4. Visualización
-                    fig_greenflags = px.bar(
-                        df_gf_counts,
-                        x='Green Flag',
-                        y='Cantidad',
-                        title=f'🟢 Prevalencia de Green Flags: {total_companias_con_flags} compañías',
-                        color='Cantidad',
-                        color_continuous_scale='Greens',
-                        custom_data=[df_gf_counts['Porcentaje']]
-                    )
-
-                    fig_greenflags.update_traces(
-                        texttemplate='%{y}<br>(%{customdata[0]:.1f}%)',
-                        textposition='outside',
-                        textfont=dict(color='black', size=12),
-                        cliponaxis=False
-                    )
-
-                    fig_greenflags.update_layout(
-                        yaxis=dict(range=[0, df_gf_counts['Cantidad'].max() * 1.3]), # Espacio para etiquetas
-                        xaxis=dict(tickangle=45, automargin=True),
-                        margin=dict(t=80, b=120),
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(0,0,0,0)',
-                        coloraxis_showscale=False
-                    )
-
-                    with col2:
-                        st.plotly_chart(fig_greenflags, use_container_width=True)
-                else:
-                    st.info("No se han encontrado Green Flags registradas en las compañías.")
-            else:
-                st.error(f"El campo '{campo_green_flags}' no se encuentra en el DataFrame. Verifica el nombre del atributo en Attio.")
-
-        st.title("📊 Funnel de Startups por Reference con Objetivos")
-        st.markdown("Las referencias se han agrupado en función de los objetivos definidos:<br> - Marketing: Mail from Decelera Team, Social media, Press, Google, Decelera Newsletter<br> - Referral: Referral<br> - Outreach: Event, Contacted via LinkedIn", unsafe_allow_html=True)
-
-        # --- CONFIGURACIÓN ---
-        OBJETIVOS_POR_CATEGORIA = {
-            "Marketing": {"Initial screening": 660, "Deep dive": 40, "Pre-committee": 2},
-            "Referral": {"Initial screening": 150, "Deep dive": 50, "Pre-committee": 5},
-            "Outreach": {"Initial screening": 325, "Deep dive": 50, "Pre-committee": 5},
-            "Otros": {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0}
-        }
-
-        ORDEN_ESTADOS = ["Initial screening", "Deep dive", "Pre-committee"]
-        colores = {"Marketing": "#1FD0EF", "Referral": "#FFB950", "Outreach": "#FAF3DC"}
-
-        # --- PROCESAMIENTO DE DATOS (CORREGIDO) ---
-
-        # 1. Agrupamos incluyendo 'reason' para poder filtrar por ella después
-        # 1. Trabajamos sobre el dataframe original (df) para evitar perder datos en la agrupación
-        funnel_list = []
-        categorias_validas = [c for c in df["categoria_reference"].unique() if pd.notna(c) and c != "Otros"]
-
-        for cat in categorias_validas:
-            # Filtramos el DF por la categoría actual
-            df_cat = df[df["categoria_reference"] == cat]
-
-            # --- Conteo de Pre-committee (Los 4 que mencionas) ---
-            # Buscamos en ambas columnas: status o reason
-            mask_pre = (
-                (df_cat["status"] == "Pre-committee") | 
-                (df_cat["reason"] == "Pre-comitee") | 
-                (df_cat["reason"] == "Pre-committee") # Por si acaso se corrige el typo
-            )
-            val_pre = len(df_cat[mask_pre])
-
-            # --- Conteo de Deep dive (Acumulado) ---
-            mask_in_play = (
-                (df_cat["status"] == "Deep dive") | 
-                (df_cat["reason"] == "Signals (In play)")
-            )
-            val_in_play = len(df_cat[mask_in_play]) + val_pre
-
-            # --- Conteo de Qualified (Acumulado) ---
-            # Nota: Aquí sumamos los que están en Qualified puro + los acumulados
-            mask_qual = (
-                (df_cat["status"] == "Initial screening") | 
-                (df_cat["reason"] == "Signals (Qualified)"))
-            val_qual = len(df_cat[mask_qual]) + val_in_play
-
-            pct_in_play = round(val_in_play / val_qual * 100, 2) if val_qual > 0 else 0
-            pct_pre = round(val_pre / val_in_play * 100, 2) if val_in_play > 0 else 0
-
-            # Obtenemos los objetivos
-            obj_dict = OBJETIVOS_POR_CATEGORIA.get(cat, {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0})
-
-            # Guardamos cada etapa en la lista para el gráfico
-            funnel_list.append({"Fuente": cat, "Etapa": "Initial screening", "Actual": val_qual, "Objetivo": obj_dict.get("Initial screening", 0), "Pct": 100})
-            funnel_list.append({"Fuente": cat, "Etapa": "Deep dive", "Actual": val_in_play, "Objetivo": obj_dict.get("Deep dive", 0), "Pct": pct_in_play})
-            funnel_list.append({"Fuente": cat, "Etapa": "Pre-committee", "Actual": val_pre, "Objetivo": obj_dict.get("Pre-committee", 0), "Pct": pct_pre})
-
-        df_final_funnel = pd.DataFrame(funnel_list)
-
-        # --- VISUALIZACIÓN ---
-
-        col_qual, col_play, col_pre = st.columns(3)
-
-        for col, etapa in zip([col_qual, col_play, col_pre], ORDEN_ESTADOS):
-            with col:
-                df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa].reset_index(drop=True)
-
-                #creamos etiquetas personalizadas
-                if etapa == "Initial screening":
-                    labels = [f"{val}" for val in df_etapa["Actual"]]
-                else:
-                    labels = [f"{val}<br><span style='font-size:15px;'>({pct:.1f}%)</span>"
-                            for val, pct in zip(df_etapa["Actual"], df_etapa["Pct"])]
-                
-                fig_individual = go.Figure()
-
-                # Barra de Actual
-                fig_individual.add_trace(go.Bar(
-                    x=df_etapa["Fuente"],
-                    y=df_etapa["Actual"],
-                    marker_color=[colores.get(f, "#bdc3c7") for f in df_etapa["Fuente"]],
-                    text=labels,
-                    textposition='outside',
-                    cliponaxis=False,
-                    name="Actual",
-                    textfont=dict(color='black')
-                ))
-
-                # Marcador de Objetivo
-                fig_individual.add_trace(go.Scatter(
-                    x=df_etapa["Fuente"],
-                    y=df_etapa["Objetivo"],
-                    mode='markers',
-                    marker=dict(
-                        symbol="line-ew", 
-                        size=40, 
-                        line=dict(width=2, color="#555555")
-                    ),
-                    hoverinfo="text",
-                    text=[f"Meta: {obj}" for obj in df_etapa["Objetivo"]]
-                ))
-
-                fig_individual.update_layout(
-                    title=f"<b>{etapa}</b>",
-                    showlegend=False,
-                    height=400,
-                    margin=dict(l=20, r=20, t=50, b=40),
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    xaxis=dict(tickfont=dict(color='black'), linecolor='#d0d0d0'),
-                    yaxis=dict(tickfont=dict(color='black'), gridcolor='#f0f0f0')
-                )
-
-                st.plotly_chart(fig_individual, use_container_width=True)
-
+    funnel_list = []
+    for cat in [c for c in df["categoria_reference"].unique() if pd.notna(c) and c != "Otros"]:
+        df_cat = df[df["categoria_reference"] == cat]
+        mask_pre = ((df_cat["status"] == "Pre-committee") | (df_cat["reason"].isin(["Pre-comitee", "Pre-committee"])))
+        val_pre = len(df_cat[mask_pre])
+        mask_in_play = ((df_cat["status"] == "Deep dive") | (df_cat["reason"] == "Signals (In play)")); val_in_play = len(df_cat[mask_in_play]) + val_pre
+        mask_qual = ((df_cat["status"] == "Initial screening") | (df_cat["reason"] == "Signals (Qualified)")); val_qual = len(df_cat[mask_qual]) + val_in_play
+        pct_in_play, pct_pre = (val_in_play/val_qual*100 if val_qual>0 else 0), (val_pre/val_in_play*100 if val_in_play>0 else 0)
+        obj_dict = OBJ_CAT.get(cat, {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0})
+        funnel_list.append({"Fuente": cat, "Etapa": "Initial screening", "Actual": val_qual, "Objetivo": obj_dict["Initial screening"], "Pct": 100})
+        funnel_list.append({"Fuente": cat, "Etapa": "Deep dive", "Actual": val_in_play, "Objetivo": obj_dict["Deep dive"], "Pct": pct_in_play})
+        funnel_list.append({"Fuente": cat, "Etapa": "Pre-committee", "Actual": val_pre, "Objetivo": obj_dict["Pre-committee"], "Pct": pct_pre})
     
-        # VAMOS CON LOS NOT QUALIFIED
-        st.title("🚫 Desglose de los 'Not Qualified'")
-        col1, col2 = st.columns(2)
+    df_final_funnel = pd.DataFrame(funnel_list)
+    cols_funnel = st.columns(3)
+    for col, etapa in zip(cols_funnel, ORDEN_ESTADOS):
+        with col:
+            df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa].reset_index(drop=True)
+            labels = [f"{val}" if etapa=="Initial screening" else f"{val}<br><span style='font-size:15px;'>({pct:.1f}%)</span>" for val, pct in zip(df_etapa["Actual"], df_etapa["Pct"])]
+            fig_ind = go.Figure()
+            fig_ind.add_trace(go.Bar(x=df_etapa["Fuente"], y=df_etapa["Actual"], marker_color=[colores_fun.get(f, "#bdc3c7") for f in df_etapa["Fuente"]], text=labels, textposition='outside', cliponaxis=False, name="Actual", textfont=dict(color='black')))
+            fig_ind.add_trace(go.Scatter(x=df_etapa["Fuente"], y=df_etapa["Objetivo"], mode='markers', marker=dict(symbol="line-ew", size=40, line=dict(width=2, color="#555555")), hoverinfo="text", text=[f"Meta: {obj}" for obj in df_etapa["Objetivo"]]))
+            fig_ind.update_layout(title=f"<b>{etapa}</b>", showlegend=False, height=400, margin=dict(l=20, r=20, t=50, b=40), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', xaxis=dict(tickfont=dict(color='black'), linecolor='#d0d0d0'), yaxis=dict(tickfont=dict(color='black'), gridcolor='#f0f0f0'))
+            st.plotly_chart(fig_ind, use_container_width=True)
 
-        # 1. Filtramos las empresas "Not Qualified"
-        df_not_qual = df[df['status'].str.contains("Not qualified", case=False, na=False)].copy()
-        total_empresas_not_qual = len(df_not_qual) # Este es nuestro nuevo denominador
+# ==============================================================================
+# SECCIÓN: DESGLOSE DE NOT QUALIFIED
+# ==============================================================================
 
-        # 2. Extraemos los motivos asegurándonos de no contar dos veces el mismo motivo por empresa
-        all_reasons = []
-        for entry in df_not_qual['red_flags_form_7'].dropna():
-            # Usamos set() para que si una empresa tiene escrito dos veces lo mismo, solo cuente una vez
-            reasons = list(set([r.strip() for r in str(entry).split('\n') if (r.strip() and "🛑" in r)]))
-            all_reasons.extend(reasons)
+    st.title("🚫 Desglose de los 'Not Qualified'")
+    cols_nq = st.columns(2)
+    df_not_qual = df[df['status'].str.contains("Not qualified", case=False, na=False)].copy()
+    total_nq = len(df_not_qual)
 
-        # 3. Creamos el conteo
-        df_reasons = pd.Series(all_reasons).value_counts().reset_index()
-        df_reasons.columns = ['Motivo', 'Cantidad']
+    if total_nq > 0:
+        # Red Flags de Tesis
+        all_rf = []
+        for entry in df_not_qual['red_flags_form_7'].dropna(): all_rf.extend(list(set([r.strip() for r in str(entry).split('\n') if "🛑" in r])))
+        df_rf = pd.Series(all_rf).value_counts().reset_index(); df_rf.columns = ['Motivo', 'Cantidad']; df_rf['Porcentaje'] = (df_rf['Cantidad'] / total_nq) * 100
+        fig_rf = px.bar(df_rf, x='Motivo', y='Cantidad', title='🚫 % Red Flags de Tesis', color='Cantidad', color_continuous_scale='Reds', custom_data=[df_rf['Porcentaje']])
+        fig_rf.update_traces(texttemplate='%{y}<br>(%{customdata[0]:.1f}%)', textposition='outside', textfont=dict(color='black', size=12), cliponaxis=False)
+        fig_rf.update_layout(yaxis=dict(range=[0, df_rf['Cantidad'].max() * 1.2]), xaxis=dict(tickangle=45, automargin=True), margin=dict(t=80, b=120), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
+        with cols_nq[1]: st.plotly_chart(fig_rf, use_container_width=True)
 
-        # 4. Calculamos el porcentaje sobre el TOTAL DE EMPRESAS
-        df_reasons['Porcentaje'] = (df_reasons['Cantidad'] / total_empresas_not_qual) * 100
-
-        # 5. Gráfica con las etiquetas corregidas
-        fig_redflags = px.bar(
-            df_reasons,
-            x='Motivo',
-            y='Cantidad',
-            title='🚫 % de Empresas por cada Red Flag de Tesis',
-            color='Cantidad',
-            color_continuous_scale='Reds',
-            # Pasamos el porcentaje calculado correctamente
-            custom_data=[df_reasons['Porcentaje']]
-        )
-
-        fig_redflags.update_traces(
-            # %{y} es el número de empresas, %{customdata[0]} es el % sobre el total de empresas
-            texttemplate='%{y}<br>(%{customdata[0]:.1f}%)',
-            textposition='outside',
-            textfont=dict(color='black', size=12),
-            cliponaxis=False
-        )
-
-        fig_redflags.update_layout(
-            yaxis=dict(range=[0, df_reasons['Cantidad'].max() * 1.2]), # Espacio para el texto
-            xaxis=dict(tickangle=45, automargin=True),
-            margin=dict(t=80, b=120),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            coloraxis_showscale=False
-        )
-
-        with col2:
-            st.plotly_chart(fig_redflags, use_container_width=True)
-
-        df_reasons_not_qual = df_not_qual.groupby("reason").size().reset_index()
-        df_reasons_not_qual.columns = ["reason", "conteo"]
-
-        df_reasons_not_qual["porcentaje"] = (df_reasons_not_qual["conteo"] / total_empresas_not_qual) * 100
-
-        fig_not_qual = px.bar(
-            df_reasons_not_qual,
-            x="reason",
-            y="conteo",
-            title="Motivos de 'Not Qualified'",
-            color="conteo",
-            color_continuous_scale="Reds",
-            custom_data=[df_reasons_not_qual["porcentaje"]]
-        )
-
-        fig_not_qual.update_traces(
-            # %{y} es el número de empresas, %{customdata[0]} es el % sobre el total de empresas
-            texttemplate='%{y}<br>(%{customdata[0]:.1f}%)',
-            textposition='outside',
-            textfont=dict(color='black', size=12),
-            cliponaxis=False
-        )
-
-        fig_not_qual.update_layout(
-            yaxis=dict(range=[0, df_reasons_not_qual['conteo'].max() * 1.2]), # Espacio para el texto
-            xaxis=dict(tickangle=45, automargin=True),
-            margin=dict(t=80, b=120),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            coloraxis_showscale=False
-        )
-
-        with col1:
-            st.plotly_chart(fig_not_qual, use_container_width=True)
+        # Motivos Not Qualified (Reason)
+        df_rs = df_not_qual.groupby("reason").size().reset_index(name="conteo"); df_rs["porcentaje"] = (df_rs["conteo"] / total_nq) * 100
+        fig_rs = px.bar(df_rs, x="reason", y="conteo", title="Motivos de 'Not Qualified'", color="conteo", color_continuous_scale="Reds", custom_data=[df_rs["porcentaje"]])
+        fig_rs.update_traces(texttemplate='%{y}<br>(%{customdata[0]:.1f}%)', textposition='outside', textfont=dict(color='black', size=12), cliponaxis=False)
+        fig_rs.update_layout(yaxis=dict(range=[0, df_rs['conteo'].max() * 1.2]), xaxis=dict(tickangle=45, automargin=True), margin=dict(t=80, b=120), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
+        with cols_nq[0]: st.plotly_chart(fig_rs, use_container_width=True)
