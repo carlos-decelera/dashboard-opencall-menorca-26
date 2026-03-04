@@ -7,6 +7,7 @@ from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
+from pyairtable import Api
 
 # ==============================================================================
 # CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS
@@ -38,7 +39,83 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# CONSTANTES Y CONFIGURACIÓN DE API
+# NUEVAS CONSTANTES AIRTABLE (Añadir en la sección de constantes)
+# ==============================================================================
+AIRTABLE_API_KEY = st.secrets["AIRTABLE_API_KEY"]
+AIRTABLE_BASE_ID = "appi6rzeSzAiwou4K"
+AIRTABLE_TABLE_NAME = "tblUudGTbW2y9mzaO"
+
+# ==============================================================================
+# NUEVA FUNCIÓN DE EXTRACCIÓN AIRTABLE
+# ==============================================================================
+
+@st.cache_data(ttl=600)
+def get_airtable_df():
+    # Inicialización
+    api = Api(AIRTABLE_API_KEY)
+    table = api.table(AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
+    
+    # 1. Extraemos solo el diccionario de campos de cada registro en una sola línea (list comprehension)
+    # table.all() ya gestiona la paginación de 100 en 100 de forma eficiente
+    raw_data = [r['fields'] for r in table.all(view="Applicants DEC MENORCA 2025")]
+    
+    # 2. Convertimos a DataFrame de golpe
+    df_air = pd.DataFrame(raw_data)
+    
+    # 3. Limpieza de columnas (si no existen las crea como NaN para evitar errores)
+    cols_interes = {
+        "Created": "fecha_raw", 
+        "PH1_reference_$startups": "reference"
+    }
+    # Renombramos y nos quedamos solo con lo que necesitamos
+    df_air = df_air.rename(columns=cols_interes)[list(cols_interes.values())]
+    
+    # 4. Transformación vectorizada de fechas con Pandas
+    # El formato 5/9/2025 1:38am es flexible, 'dayfirst' ayuda si es formato europeo
+    df_air["fecha_dt"] = pd.to_datetime(df_air["fecha_raw"], errors='coerce')
+    
+    return df_air
+
+with st.spinner("Conectando con Airtable..."):
+    df = get_airtable_df()
+
+def map_airtable_categories(df_air):
+    if df_air.empty:
+        return df_air
+        
+    # 1. Limpieza de strings (quitamos saltos de línea y espacios extra)
+    df_air["reference_clean"] = df_air["reference"].astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
+
+    # 2. Diccionario de mapeo basado en tus valores reales
+    mapeo_air = {
+        # --- MARKETING ---
+        'Your Newsletter': 'Marketing',
+        'Online Magazine/blog/newsletter/press': 'Marketing',
+        'Instagram': 'Marketing',
+        'Google': 'Marketing',
+        'Twitter': 'Marketing',
+        'LinkedIn': 'Marketing', # Si no es outreach directo, suele caer en marketing social
+        
+        # --- REFERRAL ---
+        'Referral': 'Referral',
+        
+        # --- OUTREACH ---
+        'Decelera team reached through email': 'Outreach',
+        'Decelera Team reached through Linkedin': 'Outreach',
+        'Startup Event / Network Event (i.e. SXSW)': 'Outreach',
+        
+        # --- OTROS / PLATAFORMAS ---
+        'Gust': 'Otros',
+        'YouNoodle': 'Otros'
+    }
+
+    # 3. Aplicar mapeo
+    df_air["categoria_reference"] = df_air["reference_clean"].map(mapeo_air).fillna("Otros")
+    
+    return df_air
+
+# ==============================================================================
+# CONSTANTES Y CONFIGURACIÓN DE API ATTIO
 # ==============================================================================
 
 ATTIO_API_KEY = st.secrets["ATTIO_API_KEY"]
@@ -178,18 +255,47 @@ with col_filtro3:
     if st.button("📅 Semana Anterior", use_container_width=True):
         st.session_state.periodo = "Semana Anterior"; st.rerun()
 
-# Lógica de filtrado temporal
+# ==============================================================================
+# LÓGICA DE FILTRADO PARA AMBOS (Dentro del flujo principal)
+# ==============================================================================
+with st.spinner("Sincronizando con Airtable..."):
+    df_air = get_airtable_df()
+
+# 1. Extraemos el número de semana actual de 2026
+hoy_2026 = pd.Timestamp.now().normalize()
+semana_actual_2026 = hoy_2026.isocalendar()[1]
+semana_anterior_2026 = semana_actual_2026 - 1
+
+# Aseguramos que ambas columnas sean datetime (Naive)
+df["fecha_dt"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None)
+df_air["fecha_dt"] = pd.to_datetime(df_air["fecha_raw"], dayfirst=True, errors='coerce').dt.tz_localize(None)
+
+# 2. Aplicamos el filtro según el botón seleccionado
 if st.session_state.periodo == "Semana":
-    df["created_at_y_dt"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None)
-    hoy = pd.Timestamp.now()
-    lunes_actual = (hoy - pd.Timedelta(days=hoy.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-    df = df[df["created_at_y_dt"] >= lunes_actual].copy()
+    # Filtramos semana actual (ej. Semana 10 de 2026 vs Semana 10 de 2025)
+    df = df[
+        (df["fecha_dt"].dt.isocalendar().week == semana_actual_2026) & 
+        (df["fecha_dt"].dt.year == 2026)
+    ].copy()
+    
+    df_air = df_air[
+        (df_air["fecha_dt"].dt.isocalendar().week == semana_actual_2026) & 
+        (df_air["fecha_dt"].dt.year == 2025)
+    ].copy()
+
 elif st.session_state.periodo == "Semana Anterior":
-    df["created_at_y_dt"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None)
-    hoy = pd.Timestamp.now()
-    lunes_actual = (hoy - pd.Timedelta(days=hoy.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-    lunes_anterior = lunes_actual - pd.Timedelta(weeks=1)
-    df = df[(df["created_at_y_dt"] >= lunes_anterior) & (df["created_at_y_dt"] < lunes_actual)].copy()
+    # Filtramos semana anterior (ej. Semana 9 de 2026 vs Semana 9 de 2025)
+    df = df[
+        (df["fecha_dt"].dt.isocalendar().week == semana_anterior_2026) & 
+        (df["fecha_dt"].dt.year == 2026)
+    ].copy()
+    
+    df_air = df_air[
+        (df_air["fecha_dt"].dt.isocalendar().week == semana_anterior_2026) & 
+        (df_air["fecha_dt"].dt.year == 2025)
+    ].copy()
+
+# Si es "Todo", no filtramos nada y se muestran los históricos completos.
 
 # ==============================================================================
 # SECCIÓN: MÉTRICAS GENERALES POR OWNER
@@ -255,7 +361,7 @@ else:
         fig = px.line(df_cat_all, x="fecha", y="count", color="categoria_reference", markers=True, template="plotly_white", color_discrete_sequence=px.colors.qualitative.Safe)
         fig.add_trace(go.Scatter(x=df_total_all["fecha"], y=df_total_all["aplicaciones"], name="Total", line=dict(color="#1FD0EF", width=4, dash="dot"), mode="lines+markers"))
 
-        line_buttons = [dict(method="update", label="Todos", args=[{"x": [df_cat_all[df_cat_all["categoria_reference"]==c]["fecha"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["fecha"]], "y": [df_cat_all[df_cat_all["categoria_reference"]==c]["count"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["aplicaciones"]]}, {"title.text": f'📈 Compañías a lo largo del tiempo (Total: {df_total_all["aplicaciones"].sum()})'}])]
+        line_buttons = [dict(method="update", label="Todos", args=[{"x": [df_cat_all[df_cat_all["categoria_reference"]==c]["fecha"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["fecha"]], "y": [df_cat_all[df_cat_all["categoria_reference"]==c]["count"] for c in df_cat_all["categoria_reference"].unique()] + [df_total_all["aplicaciones"]]}, {"title.text": f'📈 Menorca 2026: Evolución Temporal (Total: {df_total_all["aplicaciones"].sum()})'}])]
         for status in ["Deal Flow", "Open Call"]:
             df_t, df_c = get_traces_for_status(status)
             new_x, new_y = [], []
@@ -265,85 +371,182 @@ else:
                 else:
                     filtered_cat = df_c[df_c["categoria_reference"] == trace.name]
                     new_x.append(filtered_cat["fecha"]); new_y.append(filtered_cat["count"])
-            line_buttons.append(dict(method="update", label=status, args=[{"x": new_x, "y": new_y}, {"title.text": f'📈 Compañías a lo largo del tiempo (Total: {df_t["aplicaciones"].sum()})'}]))
+            line_buttons.append(dict(method="update", label=status, args=[{"x": new_x, "y": new_y}, {"title.text": f'📈 Menorca 2026: Evolución Temporal (Total: {df_t["aplicaciones"].sum()})'}]))
 
-        fig.update_layout(updatemenus=[dict(buttons=line_buttons, direction="down", showactive=True, x=1.0, xanchor="right", y=1.2, yanchor="top", bgcolor="white", bordercolor="#bec8d9")], title=f'📈 Compañías a lo largo del tiempo (Total: {df_total_all["aplicaciones"].sum()})', hovermode='x unified', xaxis=dict(type='date', tickformat='%d %b'), yaxis=dict(rangemode="tozero"), margin=dict(t=100), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+        fig.update_layout(updatemenus=[dict(buttons=line_buttons, direction="down", showactive=True, x=1.0, xanchor="right", y=1.2, yanchor="top", bgcolor="white", bordercolor="#bec8d9")], title=f'📈 Menorca 2026: Evolución Temporal (Total: {df_total_all["aplicaciones"].sum()})', hovermode='x unified', xaxis=dict(type='date', tickformat='%d %b'), yaxis=dict(rangemode="tozero"), margin=dict(t=100), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         for trace in fig.data: 
             if trace.name != "Total": trace.visible = "legendonly"
 
         cols_row1 = st.columns(2)
         with cols_row1[0]: st.plotly_chart(fig, use_container_width=True)
 
-        # --- PIE CHART (REFERENCE) ---
-        df_counts_all = df["categoria_reference"].value_counts()
-        fig_pie = px.pie(names=df_counts_all.index, values=df_counts_all.values, title='🎯 Distribución por Reference', hole=0.4, color_discrete_sequence=px.colors.qualitative.Safe)
-        pie_buttons = [dict(method="restyle", label="Todos", args=[{"values": [df_counts_all.values], "labels": [df_counts_all.index]}])]
-        for status in df["stage_bonito"].dropna().unique().tolist():
-            df_temp = df[df["stage_bonito"] == status]["categoria_reference"].value_counts()
-            pie_buttons.append(dict(method="restyle", label=status, args=[{"values": [df_temp.values], "labels": [df_temp.index]}]))
+    with cols_row1[1]:
+        if not df_air.empty:
+            df_air["fecha"] = df_air["fecha_dt"].dt.date
+            
+            df_air = map_airtable_categories(df_air)
+            
+            df_total_air = df_air.groupby("fecha").size().reset_index(name="aplicaciones")
+            df_cat_air = df_air.groupby(["fecha", "categoria_reference"]).size().reset_index(name="count")
+            
+            fig_air = px.line(df_cat_air, x="fecha", y="count", color="categoria_reference", 
+                            markers=True, template="plotly_white", 
+                            color_discrete_sequence=px.colors.qualitative.Safe)
+            
+            fig_air.add_trace(go.Scatter(x=df_total_air["fecha"], y=df_total_air["aplicaciones"], 
+                                        name="Total", line=dict(color="#1FD0EF", width=4, dash="dot"), 
+                                        mode="lines+markers"))
+            
+            fig_air.update_layout(
+                title=f'📈 Menorca 2025: Evolución Temporal (Total: {len(df_air)})',
+                hovermode='x unified',
+                xaxis=dict(type='date', tickformat='%d %b'),
+                yaxis=dict(rangemode="tozero"),
+                margin=dict(t=100),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
+            # Ocultar categorías por defecto como en la original
+            for trace in fig_air.data: 
+                if trace.name != "Total": trace.visible = "legendonly"
+                
+            st.plotly_chart(fig_air, use_container_width=True)
 
-        fig_pie.update_layout(updatemenus=[dict(buttons=pie_buttons, direction="down", showactive=True, x=1.0, xanchor="left", y=1.2, yanchor="top", bgcolor="white", bordercolor="#bec8d9")], margin=dict(t=100, b=50, l=40, r=150), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.1))
-        fig_pie.update_traces(textinfo='percent+value', textposition='auto', marker=dict(line=dict(color="#000000", width=1)), textfont=dict(color="black", size=14))
-        with cols_row1[1]: st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
+    # ==============================================================================
+# SECCIÓN: COMPARATIVA DE FUENTES (ATTIO 2026 VS AIRTABLE 2025)
+# ==============================================================================
+
+st.title("🎯 Comparativa de Distribución por Fuente")
+
+# Creamos dos columnas iguales
+cols_pie = st.columns(2)
+
+# --- 1. PIE CHART ATTIO (IZQUIERDA) ---
+with cols_pie[0]:
+    if not df.empty:
+        df_counts_all = df["categoria_reference"].value_counts()
+        fig_pie = px.pie(
+            names=df_counts_all.index, 
+            values=df_counts_all.values, 
+            title=f'<b>Attio 2026</b> ({st.session_state.periodo})', 
+            hole=0.4, 
+            color_discrete_sequence=px.colors.qualitative.Safe
+        )
+        
+        # Botones de filtro por Stage (Solo para el de la izquierda)
+        pie_buttons = [dict(method="restyle", label="Todos", args=[{"values": [df_counts_all.values], "labels": [df_counts_all.index]}])]
+        if "stage_bonito" in df.columns:
+            for status in df["stage_bonito"].dropna().unique().tolist():
+                df_temp = df[df["stage_bonito"] == status]["categoria_reference"].value_counts()
+                pie_buttons.append(dict(method="restyle", label=status, args=[{"values": [df_temp.values], "labels": [df_temp.index]}]))
+
+        fig_pie.update_layout(
+            updatemenus=[dict(buttons=pie_buttons, direction="down", showactive=True, x=1.0, xanchor="left", y=1.2, yanchor="top", bgcolor="white", bordercolor="#bec8d9")],
+            margin=dict(t=100, b=50, l=40, r=150), 
+            paper_bgcolor='rgba(0,0,0,0)', 
+            plot_bgcolor='rgba(0,0,0,0)', 
+            legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.1)
+        )
+        fig_pie.update_traces(
+            textinfo='percent+value', 
+            textposition='auto', 
+            marker=dict(line=dict(color="#000000", width=1)), 
+            textfont=dict(color="black", size=14)
+        )
+        st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
+    else:
+        st.info("No hay datos de Attio para esta selección.")
+
+# --- 2. PIE CHART AIRTABLE (DERECHA) ---
+with cols_pie[1]:
+    if not df_air.empty:
+        # Aseguramos que las categorías estén mapeadas para Airtable
+        df_air = map_airtable_categories(df_air)
+        df_counts_air = df_air["categoria_reference"].value_counts()
+        
+        fig_pie_air = px.pie(
+            names=df_counts_air.index, 
+            values=df_counts_air.values, 
+            title=f'<b>Airtable 2025</b> ({st.session_state.periodo})', 
+            hole=0.4, 
+            color_discrete_sequence=px.colors.qualitative.Safe # Mismo set de colores
+        )
+        
+        # En el de Airtable no ponemos el menú desplegable para mantenerlo como referencia fija
+        fig_pie_air.update_layout(
+            margin=dict(t=100, b=50, l=40, r=150), # Exactamente el mismo margen
+            paper_bgcolor='rgba(0,0,0,0)', 
+            plot_bgcolor='rgba(0,0,0,0)', 
+            legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.1) # Misma posición de leyenda
+        )
+        fig_pie_air.update_traces(
+            textinfo='percent+value', 
+            textposition='auto', 
+            marker=dict(line=dict(color="#000000", width=1)), 
+            textfont=dict(color="black", size=14)
+        )
+        st.plotly_chart(fig_pie_air, use_container_width=True, config={"displayModeBar": False})
+    else:
+        st.info("No hay datos de Airtable para esta selección.")
 
 # ==============================================================================
 # SECCIÓN: UBICACIÓN Y SCORING (BARS & DISTPLOT)
 # ==============================================================================
 
-        col1_loc, col2_gf = st.columns(2)
-        campo_const = "constitution_company"
-        if campo_const in df.columns:
-            df_const = df.copy(); df_const[campo_const] = df_const[campo_const].fillna("Sin especificar")
-            def get_labels_with_pct(counts_series):
-                total = counts_series.sum()
-                return [f"{v} ({(v/total)*100:.1f}%)" if total > 0 else f"{v}" for v in counts_series]
-            df_all_loc = df_const.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
-            text_all_loc = get_labels_with_pct(df_all_loc["Cantidad"])
-            fig_const = px.bar(df_all_loc, x=campo_const, y="Cantidad", title="Constitution location", color="Cantidad", color_continuous_scale="Blues", text=text_all_loc, template="plotly_white")
-            const_buttons = [dict(method="restyle", label="Todos", args=[{"x": [df_all_loc[campo_const].tolist()], "y": [df_all_loc["Cantidad"].tolist()], "text": [text_all_loc], "marker.color": [df_all_loc["Cantidad"].tolist()]}])]
-            for status in df_const["stage_bonito"].dropna().unique().tolist():
-                df_filtered = df_const[df_const["stage_bonito"] == status]
-                df_temp = df_filtered.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
-                text_temp = get_labels_with_pct(df_temp["Cantidad"])
-                const_buttons.append(dict(method="restyle", label=status, args=[{"x": [df_temp[campo_const].tolist()], "y": [df_temp["Cantidad"].tolist()], "text": [text_temp], "marker.color": [df_temp["Cantidad"].tolist()]}]))
-            fig_const.update_layout(updatemenus=[dict(buttons=const_buttons, direction="down", showactive=True, x=1.0, xanchor="right", y=1.25, yanchor="top", bgcolor="white", bordercolor="#bec8d9")], margin=dict(t=120, b=50, l=40, r=40), xaxis={'categoryorder':'total descending'}, coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-            fig_const.update_traces(textposition='outside', cliponaxis=False, textfont=dict(size=12, color="black"))
-            with col1_loc: st.plotly_chart(fig_const, use_container_width=True, config={"displayModeBar": False})
+col1_loc, col2_gf = st.columns(2)
+campo_const = "constitution_company"
+if campo_const in df.columns:
+    df_const = df.copy(); df_const[campo_const] = df_const[campo_const].fillna("Sin especificar")
+    def get_labels_with_pct(counts_series):
+        total = counts_series.sum()
+        return [f"{v} ({(v/total)*100:.1f}%)" if total > 0 else f"{v}" for v in counts_series]
+    df_all_loc = df_const.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
+    text_all_loc = get_labels_with_pct(df_all_loc["Cantidad"])
+    fig_const = px.bar(df_all_loc, x=campo_const, y="Cantidad", title="Constitution location", color="Cantidad", color_continuous_scale="Blues", text=text_all_loc, template="plotly_white")
+    const_buttons = [dict(method="restyle", label="Todos", args=[{"x": [df_all_loc[campo_const].tolist()], "y": [df_all_loc["Cantidad"].tolist()], "text": [text_all_loc], "marker.color": [df_all_loc["Cantidad"].tolist()]}])]
+    for status in df_const["stage_bonito"].dropna().unique().tolist():
+        df_filtered = df_const[df_const["stage_bonito"] == status]
+        df_temp = df_filtered.groupby(campo_const).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
+        text_temp = get_labels_with_pct(df_temp["Cantidad"])
+        const_buttons.append(dict(method="restyle", label=status, args=[{"x": [df_temp[campo_const].tolist()], "y": [df_temp["Cantidad"].tolist()], "text": [text_temp], "marker.color": [df_temp["Cantidad"].tolist()]}]))
+    fig_const.update_layout(updatemenus=[dict(buttons=const_buttons, direction="down", showactive=True, x=1.0, xanchor="right", y=1.25, yanchor="top", bgcolor="white", bordercolor="#bec8d9")], margin=dict(t=120, b=50, l=40, r=40), xaxis={'categoryorder':'total descending'}, coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+    fig_const.update_traces(textposition='outside', cliponaxis=False, textfont=dict(size=12, color="black"))
+    with col1_loc: st.plotly_chart(fig_const, use_container_width=True, config={"displayModeBar": False})
 
-        # --- DISTPLOT Y GREEN FLAGS ---
-        df_score = df[df["form_score"].notna()].copy()
-        df_score["form_score"] = pd.to_numeric(df_score["form_score"], errors="coerce")
-        df_score = df_score[df_score["form_score"] > 0]
-        st.title(f"📈 Form Scoring de las aplicaciones: {len(df_score)} aplicaciones")
-        c_score1, c_score2 = st.columns(2)
+# --- DISTPLOT Y GREEN FLAGS ---
+df_score = df[df["form_score"].notna()].copy()
+df_score["form_score"] = pd.to_numeric(df_score["form_score"], errors="coerce")
+df_score = df_score[df_score["form_score"] > 0]
+st.title(f"📈 Form Scoring de las aplicaciones: {len(df_score)} aplicaciones")
+c_score1, c_score2 = st.columns(2)
 
-        if len(df_score) <= 1 or df_score["form_score"].nunique() <= 1:
-            with c_score1: 
-                st.warning("No hay suficientes datos variados.")
-                if not df_score.empty: st.plotly_chart(px.histogram(df_score, x="form_score"), use_container_width=True)
-        else:
-            fig_dist = ff.create_distplot([df_score["form_score"]], ['Form Score'], show_hist=False, show_rug=False, colors=['#1FD0EF'])
-            total_s = len(df_score)
-            n_bajo, n_medio, n_alto = len(df_score[df_score["form_score"] < 30]), len(df_score[(df_score["form_score"] >= 30) & (df_score["form_score"] < 65)]), len(df_score[df_score["form_score"] >= 65])
-            fig_dist.add_vline(x=30, line_dash="dash", line_color="#ef4444", line_width=2)
-            fig_dist.add_vline(x=65, line_dash="dash", line_color="#22c55e", line_width=2)
-            for s in [{"x": 15, "n": n_bajo, "lbl": "Bajo"}, {"x": 47, "n": n_medio, "lbl": "Medio"}, {"x": 82, "n": n_alto, "lbl": "Alto"}]:
-                fig_dist.add_annotation(x=s["x"], y=0.85, yref="paper", text=f"<b>{s['lbl']}</b><br>{s['n']} deals<br>{(s['n']/total_s)*100:.1f}%", showarrow=False, font=dict(size=13))
-            fig_dist.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, margin=dict(t=40, b=40, l=20, r=20), xaxis=dict(title="Puntuación", range=[0, 100], dtick=10), yaxis=dict(title="Densidad"))
-            with c_score1: st.plotly_chart(fig_dist, use_container_width=True)
+if len(df_score) <= 1 or df_score["form_score"].nunique() <= 1:
+    with c_score1: 
+        st.warning("No hay suficientes datos variados.")
+        if not df_score.empty: st.plotly_chart(px.histogram(df_score, x="form_score"), use_container_width=True)
+else:
+    fig_dist = ff.create_distplot([df_score["form_score"]], ['Form Score'], show_hist=False, show_rug=False, colors=['#1FD0EF'])
+    total_s = len(df_score)
+    n_bajo, n_medio, n_alto = len(df_score[df_score["form_score"] < 30]), len(df_score[(df_score["form_score"] >= 30) & (df_score["form_score"] < 65)]), len(df_score[df_score["form_score"] >= 65])
+    fig_dist.add_vline(x=30, line_dash="dash", line_color="#ef4444", line_width=2)
+    fig_dist.add_vline(x=65, line_dash="dash", line_color="#22c55e", line_width=2)
+    for s in [{"x": 15, "n": n_bajo, "lbl": "Bajo"}, {"x": 47, "n": n_medio, "lbl": "Medio"}, {"x": 82, "n": n_alto, "lbl": "Alto"}]:
+        fig_dist.add_annotation(x=s["x"], y=0.85, yref="paper", text=f"<b>{s['lbl']}</b><br>{s['n']} deals<br>{(s['n']/total_s)*100:.1f}%", showarrow=False, font=dict(size=13))
+    fig_dist.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, margin=dict(t=40, b=40, l=20, r=20), xaxis=dict(title="Puntuación", range=[0, 100], dtick=10), yaxis=dict(title="Densidad"))
+    with c_score1: st.plotly_chart(fig_dist, use_container_width=True)
 
-        # Green Flags
-        campo_green_flags = 'green_flags_form'
-        if campo_green_flags in df.columns:
-            df_green = df[df[campo_green_flags].str.contains("🟢", na=False)].copy()
-            if not df_green.empty:
-                all_green = []
-                for entry in df_green[campo_green_flags]: all_green.extend(list(set([g.strip() for g in str(entry).split('\n') if "🟢" in g])))
-                df_gf_counts = pd.Series(all_green).value_counts().reset_index(); df_gf_counts.columns = ['Green Flag', 'Cantidad']; df_gf_counts['Porcentaje'] = (df_gf_counts['Cantidad'] / len(df_green)) * 100
-                fig_gf = px.bar(df_gf_counts, x='Green Flag', y='Cantidad', title=f'🟢 Green Flags: {len(df_green)} compañías', color='Cantidad', color_continuous_scale='Greens', custom_data=[df_gf_counts['Porcentaje']])
-                fig_gf.update_traces(texttemplate='%{y}<br>(%{customdata[0]:.1f}%)', textposition='outside', textfont=dict(color='black', size=12), cliponaxis=False)
-                fig_gf.update_layout(yaxis=dict(range=[0, df_gf_counts['Cantidad'].max() * 1.3]), xaxis=dict(tickangle=45, automargin=True), margin=dict(t=80, b=120), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
-                with c_score2: st.plotly_chart(fig_gf, use_container_width=True)
+# Green Flags
+campo_green_flags = 'green_flags_form'
+if campo_green_flags in df.columns:
+    df_green = df[df[campo_green_flags].str.contains("🟢", na=False)].copy()
+    if not df_green.empty:
+        all_green = []
+        for entry in df_green[campo_green_flags]: all_green.extend(list(set([g.strip() for g in str(entry).split('\n') if "🟢" in g])))
+        df_gf_counts = pd.Series(all_green).value_counts().reset_index(); df_gf_counts.columns = ['Green Flag', 'Cantidad']; df_gf_counts['Porcentaje'] = (df_gf_counts['Cantidad'] / len(df_green)) * 100
+        fig_gf = px.bar(df_gf_counts, x='Green Flag', y='Cantidad', title=f'🟢 Green Flags: {len(df_green)} compañías', color='Cantidad', color_continuous_scale='Greens', custom_data=[df_gf_counts['Porcentaje']])
+        fig_gf.update_traces(texttemplate='%{y}<br>(%{customdata[0]:.1f}%)', textposition='outside', textfont=dict(color='black', size=12), cliponaxis=False)
+        fig_gf.update_layout(yaxis=dict(range=[0, df_gf_counts['Cantidad'].max() * 1.3]), xaxis=dict(tickangle=45, automargin=True), margin=dict(t=80, b=120), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', coloraxis_showscale=False)
+        with c_score2: st.plotly_chart(fig_gf, use_container_width=True)
 
 # ==============================================================================
 # SECCIÓN: FUNNEL DE STARTUPS Y OBJETIVOS
