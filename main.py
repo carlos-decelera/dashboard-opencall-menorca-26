@@ -412,11 +412,19 @@ else:
                 
             st.plotly_chart(fig_air, use_container_width=True)
 
-    # ==============================================================================
+# ==============================================================================
 # SECCIÓN: COMPARATIVA DE FUENTES (ATTIO 2026 VS AIRTABLE 2025)
 # ==============================================================================
 
 st.title("🎯 Comparativa de Distribución por Fuente")
+
+color_map = {
+    "Marketing": "#1FD0EF",
+    "Referral": "#FFB950",
+    "Outreach": "#B9C1D4",
+    "Otros": "#F2F8FA",
+    "No Especificado": "#FAF3DC"
+}
 
 # Creamos dos columnas iguales
 cols_pie = st.columns(2)
@@ -429,8 +437,9 @@ with cols_pie[0]:
             names=df_counts_all.index, 
             values=df_counts_all.values, 
             title=f'<b>Attio 2026</b> ({st.session_state.periodo})', 
-            hole=0.4, 
-            color_discrete_sequence=px.colors.qualitative.Safe
+            hole=0.4,
+            color=df_counts_all.index,
+            color_discrete_map=color_map
         )
         
         # Botones de filtro por Stage (Solo para el de la izquierda)
@@ -468,8 +477,9 @@ with cols_pie[1]:
             names=df_counts_air.index, 
             values=df_counts_air.values, 
             title=f'<b>Airtable 2025</b> ({st.session_state.periodo})', 
-            hole=0.4, 
-            color_discrete_sequence=px.colors.qualitative.Safe # Mismo set de colores
+            hole=0.4,
+            color=df_counts_air.index,
+            color_discrete_map=color_map
         )
         
         # En el de Airtable no ponemos el menú desplegable para mantenerlo como referencia fija
@@ -549,33 +559,56 @@ if campo_green_flags in df.columns:
         with c_score2: st.plotly_chart(fig_gf, use_container_width=True)
 
 # ==============================================================================
-# SECCIÓN: FUNNEL DE STARTUPS Y OBJETIVOS
+# SECCIÓN: FUNNEL DE STARTUPS Y OBJETIVOS (CON FILTRO DE STAGE)
 # ==============================================================================
 
 st.title("📊 Funnel de Startups por Reference con Objetivos")
-st.markdown("Las referencias se han agrupado en función de los objetivos definidos:<br> - Marketing: Mail from Decelera Team, Social media, Press, Google, Decelera Newsletter<br> - Referral: Referral<br> - Outreach: Event, Contacted via LinkedIn", unsafe_allow_html=True)
 
+# 1. Definimos los mapeos y objetivos
 OBJ_CAT = {
     "Marketing": {"Initial screening": 660, "Deep dive": 40, "Pre-committee": 2}, 
     "Referral": {"Initial screening": 150, "Deep dive": 50, "Pre-committee": 5}, 
     "Outreach": {"Initial screening": 325, "Deep dive": 50, "Pre-committee": 5}, 
     "Otros": {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0}
 }
-ORDEN_ESTADOS, colores_fun = ["Initial screening", "Deep dive", "Pre-committee"], {"Marketing": "#1FD0EF", "Referral": "#FFB950", "Outreach": "#FAF3DC"}
+ORDEN_ESTADOS = ["Initial screening", "Deep dive", "Pre-committee"]
+colores_fun = {"Marketing": "#1FD0EF", "Referral": "#FFB950", "Outreach": "#22c55e", "Otros": "#bdc3c7"}
 
-# --- LÓGICA DE DATOS DEL FUNNEL ---
+# 2. Selector de Stage para el Funnel (Opcional: puedes usar st.session_state si quieres vincularlo a los botones de arriba)
+# Si quieres que sea independiente, usamos un radio o selectbox:
+filtro_funnel = st.radio("Seleccionar flujo:", ["Todos", "Deal Flow", "Open Call"], horizontal=True, key="funnel_filter_radio")
+
+# 3. Filtrado de datos según la selección
+df_funnel_input = df.copy()
+if filtro_funnel != "Todos":
+    # Usamos el mapeo que definiste antes: "Leads Menorca 2026" -> "Deal Flow", "Menorca 2026" -> "Open Call"
+    status_map_inv = {"Deal Flow": "Leads Menorca 2026", "Open Call": "Menorca 2026"}
+    df_funnel_input = df_funnel_input[df_funnel_input["stage"] == status_map_inv[filtro_funnel]]
+
+st.markdown(f"Mostrando funnel para: **{filtro_funnel}**", unsafe_allow_html=True)
+
+# 4. LÓGICA DE PROCESAMIENTO DE DATOS
 funnel_list = []
-# Obtenemos categorías únicas presentes en el DF
-cats_presentes = [c for c in df["categoria_reference"].unique() if pd.notna(c) and c != "Otros"]
+cats_presentes = [c for c in df_funnel_input["categoria_reference"].unique() if pd.notna(c) and c != "Otros"]
 
 for cat in cats_presentes:
-    df_cat = df[df["categoria_reference"] == cat]
+    df_cat = df_funnel_input[df_funnel_input["categoria_reference"] == cat]
+    
+    # Pre-committee
     mask_pre = ((df_cat["status"] == "Pre-committee") | (df_cat["reason"].isin(["Pre-comitee", "Pre-committee"])))
     val_pre = len(df_cat[mask_pre])
-    mask_in_play = ((df_cat["status"] == "Deep dive") | (df_cat["reason"] == "Signals (In play)")); val_in_play = len(df_cat[mask_in_play]) + val_pre
-    mask_qual = ((df_cat["status"] == "Initial screening") | (df_cat["reason"] == "Signals (Qualified)")); val_qual = len(df_cat[mask_qual]) + val_in_play
     
-    pct_in_play, pct_pre = (val_in_play/val_qual*100 if val_qual>0 else 0), (val_pre/val_in_play*100 if val_in_play>0 else 0)
+    # Deep dive (acumula pre-committee)
+    mask_in_play = ((df_cat["status"] == "Deep dive") | (df_cat["reason"] == "Signals (In play)"))
+    val_in_play = len(df_cat[mask_in_play]) + val_pre
+    
+    # Initial screening (acumula deep dive)
+    mask_qual = ((df_cat["status"] == "Initial screening") | (df_cat["reason"] == "Signals (Qualified)"))
+    val_qual = len(df_cat[mask_qual]) + val_in_play
+    
+    pct_in_play = (val_in_play/val_qual*100 if val_qual > 0 else 0)
+    pct_pre = (val_pre/val_in_play*100 if val_in_play > 0 else 0)
+    
     obj_dict = OBJ_CAT.get(cat, {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0})
     
     funnel_list.append({"Fuente": cat, "Etapa": "Initial screening", "Actual": val_qual, "Objetivo": obj_dict["Initial screening"], "Pct": 100})
@@ -583,32 +616,58 @@ for cat in cats_presentes:
     funnel_list.append({"Fuente": cat, "Etapa": "Pre-committee", "Actual": val_pre, "Objetivo": obj_dict["Pre-committee"], "Pct": pct_pre})
 
 df_final_funnel = pd.DataFrame(funnel_list)
-totales_col = {etapa: df_final_funnel[df_final_funnel["Etapa"] == etapa]["Actual"].sum() for etapa in ORDEN_ESTADOS}
 
-# --- DIBUJAR COLUMNAS DEL FUNNEL ---
-cols_funnel = st.columns(3)
-for i, etapa in enumerate(ORDEN_ESTADOS):
-    with cols_funnel[i]:
-        df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa].reset_index(drop=True)
-        t_actual = totales_col[etapa]
-        
-        if i == 0:
-            texto_titulo = f"<b>{etapa}</b><br><span style='font-size:14px;'>Total: {t_actual}</span>"
-        else:
-            t_previo = totales_col[ORDEN_ESTADOS[i-1]]
-            conv = (t_actual / t_previo * 100) if t_previo > 0 else 0
-            texto_titulo = f"<b>{etapa}</b><br><span style='font-size:14px;'>Total: {t_actual} ({conv:.1f}% vs ant.)</span>"
+# 5. DIBUJAR COLUMNAS
+if df_final_funnel.empty:
+    st.info("No hay datos para este flujo en el periodo seleccionado.")
+else:
+    totales_col = {etapa: df_final_funnel[df_final_funnel["Etapa"] == etapa]["Actual"].sum() for etapa in ORDEN_ESTADOS}
+    cols_funnel = st.columns(3)
 
-        labels = [f"{val}" if etapa=="Initial screening" else f"{val}<br><span style='font-size:15px;'>({pct:.1f}%)</span>" for val, pct in zip(df_etapa["Actual"], df_etapa["Pct"])]
-        
-        fig_ind = go.Figure()
-        fig_ind.add_trace(go.Bar(x=df_etapa["Fuente"], y=df_etapa["Actual"], marker_color=[colores_fun.get(f, "#bdc3c7") for f in df_etapa["Fuente"]], text=labels, textposition='outside', cliponaxis=False))
-        fig_ind.add_trace(go.Scatter(x=df_etapa["Fuente"], y=df_etapa["Objetivo"], mode='markers', marker=dict(symbol="line-ew", size=40, line=dict(width=2, color="#555555"))))
-        
-        fig_ind.update_layout(title=texto_titulo, showlegend=False, height=400, margin=dict(l=20, r=20, t=85, b=40), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-        
-        # KEY dinámica para evitar problemas de caché
-        st.plotly_chart(fig_ind, use_container_width=True, key=f"funnel_vfinal_{i}_{t_actual}")
+    for i, etapa in enumerate(ORDEN_ESTADOS):
+        with cols_funnel[i]:
+            df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa].reset_index(drop=True)
+            t_actual = totales_col[etapa]
+            
+            if i == 0:
+                texto_titulo = f"<b>{etapa}</b><br><span style='font-size:14px;'>Total: {t_actual}</span>"
+            else:
+                t_previo = totales_col[ORDEN_ESTADOS[i-1]]
+                conv = (t_actual / t_previo * 100) if t_previo > 0 else 0
+                texto_titulo = f"<b>{etapa}</b><br><span style='font-size:14px;'>Total: {t_actual} ({conv:.1f}% vs ant.)</span>"
+
+            labels = [f"{val}" if etapa=="Initial screening" else f"{val}<br><span style='font-size:15px;'>({pct:.1f}%)</span>" for val, pct in zip(df_etapa["Actual"], df_etapa["Pct"])]
+            
+            fig_ind = go.Figure()
+            fig_ind.add_trace(go.Bar(
+                x=df_etapa["Fuente"], 
+                y=df_etapa["Actual"], 
+                marker_color=[colores_fun.get(f, "#bdc3c7") for f in df_etapa["Fuente"]], 
+                text=labels, 
+                textposition='outside', 
+                cliponaxis=False
+            ))
+            
+            # Dibujar la línea de objetivo
+            fig_ind.add_trace(go.Scatter(
+                x=df_etapa["Fuente"], 
+                y=df_etapa["Objetivo"], 
+                name="Objetivo",
+                mode='markers', 
+                marker=dict(symbol="line-ew", size=40, line=dict(width=2, color="#555555"))
+            ))
+            
+            fig_ind.update_layout(
+                title=texto_titulo, 
+                showlegend=False, 
+                height=400, 
+                margin=dict(l=20, r=20, t=85, b=40), 
+                paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)',
+                yaxis=dict(range=[0, max(df_etapa["Actual"].max(), df_etapa["Objetivo"].max()) * 1.2] if not df_etapa.empty else None)
+            )
+            
+            st.plotly_chart(fig_ind, use_container_width=True, key=f"funnel_{filtro_funnel}_{i}")
 
 # ==============================================================================
 # SECCIÓN: DESGLOSE DE NOT QUALIFIED (RESTURACIÓN DE ESTILO ORIGINAL)
