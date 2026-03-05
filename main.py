@@ -527,23 +527,76 @@ if campo_const in df.columns:
 df_score = df[df["form_score"].notna()].copy()
 df_score["form_score"] = pd.to_numeric(df_score["form_score"], errors="coerce")
 df_score = df_score[df_score["form_score"] > 0]
+
 st.title(f"📈 Form Scoring de las aplicaciones: {len(df_score)} aplicaciones")
 c_score1, c_score2 = st.columns(2)
 
 if len(df_score) <= 1 or df_score["form_score"].nunique() <= 1:
     with c_score1: 
-        st.warning("No hay suficientes datos variados.")
-        if not df_score.empty: st.plotly_chart(px.histogram(df_score, x="form_score"), use_container_width=True)
+        st.warning("No hay suficientes datos variados para generar la curva de densidad.")
+        if not df_score.empty: 
+            st.plotly_chart(px.histogram(df_score, x="form_score", nbins=20, title="Distribución Simple"), use_container_width=True)
 else:
-    fig_dist = ff.create_distplot([df_score["form_score"]], ['Form Score'], show_hist=False, show_rug=False, colors=['#1FD0EF'])
+    # 1. Preparar los datos: Total + Desglose por categoría
+    hist_data = [df_score["form_score"].tolist()]
+    group_labels = ['Total']
+    
+    # Añadimos los datos de cada categoría que tenga al menos 2 valores (necesario para la curva KDE)
+    for cat in df_score["categoria_reference"].unique():
+        if pd.isna(cat): continue
+        cat_values = df_score[df_score["categoria_reference"] == cat]["form_score"].tolist()
+        if len(cat_values) > 1: # Necesitamos al menos 2 puntos para una curva
+            hist_data.append(cat_values)
+            group_labels.append(cat)
+
+    # 2. Definir colores (usando tu mapa de colores anterior para consistencia)
+    # El primer color es el 'Total' (#1FD0EF), los demás siguen el mapa
+    colores_dist = ['#1FD0EF'] + [color_map.get(label, "#bdc3c7") for label in group_labels[1:]]
+
+    # 3. Crear el distplot
+    fig_dist = ff.create_distplot(
+        hist_data, 
+        group_labels, 
+        show_hist=False, 
+        show_rug=False, 
+        colors=colores_dist
+    )
+
+    # 4. Configurar visibilidad inicial: Solo 'Total' visible, las demás en la leyenda
+    for trace in fig_dist.data:
+        if trace.name != 'Total':
+            trace.visible = 'legendonly'
+        else:
+            trace.line = dict(width=4) # Hacer la línea total más gruesa
+
+    # 5. Anotaciones y líneas de umbral (referentes al Total)
     total_s = len(df_score)
-    n_bajo, n_medio, n_alto = len(df_score[df_score["form_score"] < 30]), len(df_score[(df_score["form_score"] >= 30) & (df_score["form_score"] < 65)]), len(df_score[df_score["form_score"] >= 65])
+    n_bajo = len(df_score[df_score["form_score"] < 30])
+    n_medio = len(df_score[(df_score["form_score"] >= 30) & (df_score["form_score"] < 65)])
+    n_alto = len(df_score[df_score["form_score"] >= 65])
+    
     fig_dist.add_vline(x=30, line_dash="dash", line_color="#ef4444", line_width=2)
     fig_dist.add_vline(x=65, line_dash="dash", line_color="#22c55e", line_width=2)
+    
     for s in [{"x": 15, "n": n_bajo, "lbl": "Bajo"}, {"x": 47, "n": n_medio, "lbl": "Medio"}, {"x": 82, "n": n_alto, "lbl": "Alto"}]:
-        fig_dist.add_annotation(x=s["x"], y=0.85, yref="paper", text=f"<b>{s['lbl']}</b><br>{s['n']} deals<br>{(s['n']/total_s)*100:.1f}%", showarrow=False, font=dict(size=13))
-    fig_dist.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, margin=dict(t=40, b=40, l=20, r=20), xaxis=dict(title="Puntuación", range=[0, 100], dtick=10), yaxis=dict(title="Densidad"))
-    with c_score1: st.plotly_chart(fig_dist, use_container_width=True)
+        fig_dist.add_annotation(
+            x=s["x"], y=0.95, yref="paper", 
+            text=f"<b>{s['lbl']}</b><br>{s['n']} deals<br>{(s['n']/total_s)*100:.1f}%", 
+            showarrow=False, font=dict(size=12)
+        )
+
+    fig_dist.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)', 
+        plot_bgcolor='rgba(0,0,0,0)', 
+        showlegend=True, 
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(t=60, b=40, l=20, r=20), 
+        xaxis=dict(title="Puntuación (Score)", range=[0, 100], dtick=10), 
+        yaxis=dict(title="Densidad", showticklabels=False)
+    )
+
+    with c_score1: 
+        st.plotly_chart(fig_dist, use_container_width=True, key="dist_plot_combined")
 
 # Green Flags
 campo_green_flags = 'green_flags_form'
