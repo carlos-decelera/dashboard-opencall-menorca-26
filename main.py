@@ -331,7 +331,7 @@ else:
     if not df["created_at_y"].empty and "reference_3" in df.columns:
         status_map = {"Leads Menorca 2026": "Deal Flow", "Menorca 2026": "Open Call"}
         mapeo_reference = {
-            "Mail from Decelera Team": "Marketing", "Social media (LinkedIn, X, Instagram...)": "Marketing",
+            "Mail from Decelera Team": "Outreach", "Social media (LinkedIn, X, Instagram...)": "Marketing",
             "Press": "Marketing", "Google": "Marketing", "Decelera Newsletter": "Marketing",
             "Referral": "Referral", "Investor": "Referral", "Portfolio": "Referral", "Alumni": "Referral", "EM": "Referral",
             "Event": "Outreach", "Contacted by LinkedIn": "Outreach", "Outbound": "Outreach",
