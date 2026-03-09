@@ -229,8 +229,61 @@ st.markdown("")
 with st.spinner("Sincronizando con Attio..."):
     df = get_combined_dataframe()
 
+with st.spinner("Sincronizando con Airtable..."):
+    df_air = get_airtable_df()
+
 # ==============================================================================
 # SECCIÓN: KPIs Y FILTROS TEMPORALES
+# ==============================================================================
+
+# ==============================================================================
+# BLOQUE MOTOR: FILTRADO POR SEMANAS DE CAMPAÑA
+# ==============================================================================
+
+# 1. Asegurar que las fechas son datetime y sin zona horaria
+df["fecha_dt"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None)
+df_air["fecha_dt"] = pd.to_datetime(df_air["fecha_raw"], errors='coerce').dt.tz_localize(None)
+
+# 2. Guardar copias "raw" para tener siempre el histórico completo disponible
+df_raw = df.copy()
+df_air_raw = df_air.copy()
+
+# 3. Calcular semanas relativas (Semana 1 = primera fecha detectada en los datos)
+fecha_min_attio = df_raw["fecha_dt"].min()
+df_raw["semana_campana"] = ((df_raw["fecha_dt"] - fecha_min_attio).dt.days // 7) + 1
+
+fecha_min_air = df_air_raw["fecha_dt"].min()
+df_air_raw["semana_campana"] = ((df_air_raw["fecha_dt"] - fecha_min_air).dt.days // 7) + 1
+
+# 4. Inicializar Session State
+if "periodo" not in st.session_state: 
+    st.session_state.periodo = "Todo"
+
+# 5. Selector Dinámico (Detecta la última semana con datos)
+max_sem_data = int(df_raw["semana_campana"].max())
+opciones_semanas = ["Todo"] + list(range(1, max_sem_data + 1))
+
+seleccion_sem = st.selectbox(
+    "📅 Seleccionar semana de campaña:",
+    options=opciones_semanas,
+    index=opciones_semanas.index(st.session_state.periodo) if st.session_state.periodo in opciones_semanas else 0,
+    format_func=lambda x: f"Semana {x}" if x != "Todo" else "🌐 Visión Global (Histórico)"
+)
+
+# 6. Guardar selección y refrescar si cambia
+if seleccion_sem != st.session_state.periodo:
+    st.session_state.periodo = seleccion_sem
+    st.rerun()
+
+# 7. FILTRADO FINAL: Sobrescribimos 'df' y 'df_air' para que tus gráficas se actualicen solas
+if st.session_state.periodo == "Todo":
+    df = df_raw.copy()
+    df_air = df_air_raw.copy()
+else:
+    df = df_raw[df_raw["semana_campana"] == st.session_state.periodo].copy()
+    df_air = df_air_raw[df_air_raw["semana_campana"] == st.session_state.periodo].copy()
+
+st.info(f"📊 Mostrando datos de: **{f'Semana {st.session_state.periodo}' if st.session_state.periodo != 'Todo' else 'Visión Global'}**")
 # ==============================================================================
 
 # KPIs rápidos
@@ -240,62 +293,6 @@ col2.metric("Not Qualified", f"{len(df[df['status'] == 'Not qualified'])} ({roun
 col3.metric("Initial screening", f"{len(df[df['status'] == 'Initial screening'])} ({round(len(df[df['status']=='Initial screening'])/len(df)*100, 2)} %)")
 col4.metric("First interaction", f"{len(df[df['status']=='First interaction'])} ({round(len(df[df['status']=='First interaction'])/len(df)*100, 2)} %)")
 col5.metric("Deep dive", f"{len(df[df['status']=='Deep dive'])} ({round(len(df[df['status']=='Deep dive'])/len(df)*100, 2)} %)")
-
-# Filtros de periodo
-col_filtro1, col_filtro2, col_filtro3, col_espacio = st.columns([0.2, 0.2, 0.2, 0.4])
-if "periodo" not in st.session_state: st.session_state.periodo = "Todo"
-
-with col_filtro1:
-    if st.button("🌐 Visión Global", use_container_width=True):
-        st.session_state.periodo = "Todo"; st.rerun()
-with col_filtro2:
-    if st.button("📅 Visión Semanal", use_container_width=True):
-        st.session_state.periodo = "Semana"; st.rerun()
-with col_filtro3:
-    if st.button("📅 Semana Anterior", use_container_width=True):
-        st.session_state.periodo = "Semana Anterior"; st.rerun()
-
-# ==============================================================================
-# LÓGICA DE FILTRADO PARA AMBOS (Dentro del flujo principal)
-# ==============================================================================
-with st.spinner("Sincronizando con Airtable..."):
-    df_air = get_airtable_df()
-
-# 1. Extraemos el número de semana actual de 2026
-hoy_2026 = pd.Timestamp.now().normalize()
-semana_actual_2026 = hoy_2026.isocalendar()[1]
-semana_anterior_2026 = semana_actual_2026 - 1
-
-# Aseguramos que ambas columnas sean datetime (Naive)
-df["fecha_dt"] = pd.to_datetime(df["created_at_y"]).dt.tz_localize(None)
-df_air["fecha_dt"] = pd.to_datetime(df_air["fecha_raw"], dayfirst=True, errors='coerce').dt.tz_localize(None)
-
-# 2. Aplicamos el filtro según el botón seleccionado
-if st.session_state.periodo == "Semana":
-    # Filtramos semana actual (ej. Semana 10 de 2026 vs Semana 10 de 2025)
-    df = df[
-        (df["fecha_dt"].dt.isocalendar().week == semana_actual_2026) & 
-        (df["fecha_dt"].dt.year == 2026)
-    ].copy()
-    
-    df_air = df_air[
-        (df_air["fecha_dt"].dt.isocalendar().week == semana_actual_2026) & 
-        (df_air["fecha_dt"].dt.year == 2025)
-    ].copy()
-
-elif st.session_state.periodo == "Semana Anterior":
-    # Filtramos semana anterior (ej. Semana 9 de 2026 vs Semana 9 de 2025)
-    df = df[
-        (df["fecha_dt"].dt.isocalendar().week == semana_anterior_2026) & 
-        (df["fecha_dt"].dt.year == 2026)
-    ].copy()
-    
-    df_air = df_air[
-        (df_air["fecha_dt"].dt.isocalendar().week == semana_anterior_2026) & 
-        (df_air["fecha_dt"].dt.year == 2025)
-    ].copy()
-
-# Si es "Todo", no filtramos nada y se muestran los históricos completos.
 
 # ==============================================================================
 # SECCIÓN: MÉTRICAS GENERALES POR OWNER
@@ -615,9 +612,13 @@ if campo_green_flags in df.columns:
 # SECCIÓN: FUNNEL DE STARTUPS Y OBJETIVOS (CON FILTRO DE STAGE)
 # ==============================================================================
 
+# ==============================================================================
+# SECCIÓN: FUNNEL DE STARTUPS Y OBJETIVOS (CON FILTRO DE STAGE)
+# ==============================================================================
+
 st.title("📊 Funnel de Startups por Reference con Objetivos")
 
-# 1. Definimos los mapeos y objetivos
+# 1. Definimos los mapeos y objetivos (Mantengo tus constantes)
 OBJ_CAT = {
     "Marketing": {"Initial screening": 660, "Deep dive": 40, "Pre-committee": 2}, 
     "Referral": {"Initial screening": 150, "Deep dive": 50, "Pre-committee": 5}, 
@@ -627,28 +628,14 @@ OBJ_CAT = {
 ORDEN_ESTADOS = ["Initial screening", "Deep dive", "Pre-committee"]
 colores_fun = {"Marketing": "#1FD0EF", "Referral": "#FFB950", "Outreach": "#22c55e", "Otros": "#bdc3c7"}
 
-# 2. Selector de Stage para el Funnel (Opcional: puedes usar st.session_state si quieres vincularlo a los botones de arriba)
-# Si quieres que sea independiente, usamos un radio o selectbox:
-filtro_funnel = st.radio("Seleccionar flujo:", ["Todos", "Deal Flow", "Open Call"], horizontal=True, key="funnel_filter_radio")
-
-# 3. Filtrado de datos según la selección
-df_funnel_input = df.copy()
-if filtro_funnel != "Todos":
-    # Usamos el mapeo que definiste antes: "Leads Menorca 2026" -> "Deal Flow", "Menorca 2026" -> "Open Call"
-    status_map_inv = {"Deal Flow": "Leads Menorca 2026", "Open Call": "Menorca 2026"}
-    df_funnel_input = df_funnel_input[df_funnel_input["stage"] == status_map_inv[filtro_funnel]]
-
-st.markdown(f"Mostrando funnel para: **{filtro_funnel}**", unsafe_allow_html=True)
-
-# 4. LÓGICA DE PROCESAMIENTO DE DATOS (REHECHA PARA PRECISIÓN)
+# 2. LÓGICA DE PROCESAMIENTO
 funnel_list = []
-# Nos aseguramos de tener las categorías
-cats_presentes = [c for c in df_funnel_input["categoria_reference"].unique() if pd.notna(c) and c != "Otros"]
+# Usamos df (que ya viene filtrado por la semana seleccionada arriba)
+cats_presentes = [c for c in df["categoria_reference"].unique() if pd.notna(c) and c != "Otros"]
 
 for cat in cats_presentes:
-    # EL UNIVERSO TOTAL DE ESTA CATEGORÍA (Lo que sale en el Pie Chart)
-    df_cat_universo = df_funnel_input[df_funnel_input["categoria_reference"] == cat]
-    total_pie_chart = len(df_cat_universo)
+    df_cat_universo = df[df["categoria_reference"] == cat]
+    total_cat = len(df_cat_universo)
     
     # Pre-committee
     mask_pre = ((df_cat_universo["status"] == "Pre-committee") | (df_cat_universo["reason"].isin(["Pre-comitee", "Pre-committee"])))
@@ -662,25 +649,22 @@ for cat in cats_presentes:
     mask_qual = ((df_cat_universo["status"] == "Initial screening") | (df_cat_universo["reason"] == "Signals (Qualified)") | (df_cat_universo["status"] == "First interaction"))
     val_qual = len(df_cat_universo[mask_qual]) + val_in_play
     
-    # CÁLCULO DE PORCENTAJES REALES
-    # % de calificación: (Calificados / Total en Pie Chart) -> Ej: 30 / 145 = 20.7%
-    pct_calif = (val_qual / total_pie_chart * 100) if total_pie_chart > 0 else 0
-    
-    # % de avance interno
-    pct_in_play = (val_in_play / val_qual * 100) if val_qual > 0 else 0
-    pct_pre = (val_pre / val_in_play * 100) if val_in_play > 0 else 0
+    # PORCENTAJES
+    pct_isc = (val_qual / total_cat * 100) if total_cat > 0 else 0
+    pct_dd = (val_in_play / val_qual * 100) if val_qual > 0 else 0
+    pct_pc = (val_pre / val_in_play * 100) if val_in_play > 0 else 0
     
     obj_dict = OBJ_CAT.get(cat, {"Initial screening": 0, "Deep dive": 0, "Pre-committee": 0})
     
-    funnel_list.append({"Fuente": cat, "Etapa": "Initial screening", "Actual": val_qual, "Objetivo": obj_dict["Initial screening"], "Pct": pct_calif})
-    funnel_list.append({"Fuente": cat, "Etapa": "Deep dive", "Actual": val_in_play, "Objetivo": obj_dict["Deep dive"], "Pct": pct_in_play})
-    funnel_list.append({"Fuente": cat, "Etapa": "Pre-committee", "Actual": val_pre, "Objetivo": obj_dict["Pre-committee"], "Pct": pct_pre})
+    funnel_list.append({"Fuente": cat, "Etapa": "Initial screening", "Actual": val_qual, "Objetivo": obj_dict["Initial screening"], "Pct": pct_isc})
+    funnel_list.append({"Fuente": cat, "Etapa": "Deep dive", "Actual": val_in_play, "Objetivo": obj_dict["Deep dive"], "Pct": pct_dd})
+    funnel_list.append({"Fuente": cat, "Etapa": "Pre-committee", "Actual": val_pre, "Objetivo": obj_dict["Pre-committee"], "Pct": pct_pc})
 
 df_final_funnel = pd.DataFrame(funnel_list)
 
-# 5. DIBUJAR COLUMNAS
+# 3. DIBUJAR COLUMNAS
 if df_final_funnel.empty:
-    st.info("No hay datos para este flujo.")
+    st.info("No hay datos para esta selección.")
 else:
     totales_col = {etapa: df_final_funnel[df_final_funnel["Etapa"] == etapa]["Actual"].sum() for etapa in ORDEN_ESTADOS}
     cols_funnel = st.columns(3)
@@ -690,42 +674,39 @@ else:
             df_etapa = df_final_funnel[df_final_funnel["Etapa"] == etapa].reset_index(drop=True)
             t_actual = totales_col[etapa]
             
-            # Título de columna
+            # TÍTULO DINÁMICO PARA TODAS LAS COLUMNAS
             if i == 0:
-                texto_titulo = f"<b>{etapa}</b><br><span style='font-size:14px;'>Total Calificadas: {t_actual}</span>"
+                # Para Initial Screening: Porcentaje sobre el total absoluto de deals (df)
+                t_total_absoluto = len(df)
+                conv_global = (t_actual / t_total_absoluto * 100) if t_total_absoluto > 0 else 0
+                texto_titulo = f"<b>{etapa}</b><br><span style='font-size:14px;'>Total Calificadas: {t_actual} ({conv_global:.1f}% del total)</span>"
             else:
+                # Para el resto: Porcentaje sobre la etapa anterior
                 t_previo = totales_col[ORDEN_ESTADOS[i-1]]
                 conv = (t_actual / t_previo * 100) if t_previo > 0 else 0
                 texto_titulo = f"<b>{etapa}</b><br><span style='font-size:14px;'>Total: {t_actual} ({conv:.1f}% vs ant.)</span>"
 
-            # Etiquetas de las barras: usamos el "Pct" que calculamos en el bucle
+            # Etiquetas de las barras individuales
             labels = [f"{val}<br><span style='font-size:15px;'>({pct:.1f}%)</span>" for val, pct in zip(df_etapa["Actual"], df_etapa["Pct"])]
             
             fig_ind = go.Figure()
             fig_ind.add_trace(go.Bar(
-                x=df_etapa["Fuente"], 
-                y=df_etapa["Actual"], 
+                x=df_etapa["Fuente"], y=df_etapa["Actual"], 
                 marker_color=[colores_fun.get(f, "#bdc3c7") for f in df_etapa["Fuente"]], 
-                text=labels, 
-                textposition='outside',
-                cliponaxis=False
+                text=labels, textposition='outside', cliponaxis=False
             ))
             
-            # Línea de objetivo
             fig_ind.add_trace(go.Scatter(
-                x=df_etapa["Fuente"], 
-                y=df_etapa["Objetivo"], 
-                mode='markers', 
+                x=df_etapa["Fuente"], y=df_etapa["Objetivo"], mode='markers', 
                 marker=dict(symbol="line-ew", size=40, line=dict(width=2, color="#555555"))
             ))
             
             fig_ind.update_layout(
-                title=texto_titulo, 
-                showlegend=False, height=400, margin=dict(l=20, r=20, t=85, b=40),
+                title=texto_titulo, showlegend=False, height=400, margin=dict(l=20, r=20, t=85, b=40),
                 paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                 yaxis=dict(range=[0, max(df_etapa["Actual"].max(), df_etapa["Objetivo"].max()) * 1.3])
             )
-            st.plotly_chart(fig_ind, use_container_width=True, key=f"funnel_final_{i}")
+            st.plotly_chart(fig_ind, use_container_width=True, key=f"funnel_semanal_{i}")
 
 # ==============================================================================
 # SECCIÓN: DESGLOSE DE NOT QUALIFIED (RESTURACIÓN DE ESTILO ORIGINAL)
@@ -733,7 +714,7 @@ else:
 
 st.title("🚫 Desglose de los 'Not Qualified'")
 cols_nq = st.columns(2)
-df_not_qual = df[df['status'].str.contains("Not qualified", case=False, na=False) | df["status"].str.contains("Killed", case=False, na=False)].copy()
+df_not_qual = df[df['status'].str.contains("Not qualified", case=False, na=False) | df["status"].str.contains("killed", case=False, na=False)].copy()
 total_nq = len(df_not_qual)
 
 if total_nq > 0:
